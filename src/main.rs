@@ -4,10 +4,27 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate libloading as lib;
 
+use std::path::PathBuf;
+use std::ffi;
+
 use gfx::Device;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
+
+fn game_lib(file: &str) -> PathBuf {
+    let mut lib_file = PathBuf::from(file);
+
+    if cfg!(target_os = "windows") {
+        lib_file.set_extension("dll");
+    } else if cfg!(target_os = "macos") {
+        lib_file.set_extension("dylib");
+    } else {
+        lib_file.set_extension("so");
+    }
+
+    lib_file
+}
 
 pub fn main() {
     let builder = glutin::WindowBuilder::new()
@@ -20,8 +37,14 @@ pub fn main() {
 
     let mut game_running = true;
 
-    let game_code = lib::Library::new("./target/debug/xtreme_game").unwrap();
-    let func: lib::Symbol<extern "C" fn() -> String> = unsafe { game_code.get(b"hello").unwrap() };
+    let game_lib = game_lib("./target/debug/game_lib");
+    let game_lib_name = match game_lib.file_name() {
+        Some(name) => name,
+        None => &ffi::OsStr::new(""),
+    };
+
+    let game_code = lib::Library::new(game_lib_name).unwrap();
+    let func: lib::Symbol<fn() -> String> = unsafe { game_code.get(b"hello").unwrap() };
 
     println!("{}", func());
 
