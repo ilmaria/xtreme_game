@@ -1,0 +1,13 @@
+[package]
+name = "xtreme_game"
+version = "0.1.0"
+authors = ["Ilmari Autio <ilmari.autio@gmail.com>"]
+
+[dependencies]
+gfx = "0.14.0"
+glutin = "0.7.4"
+gfx_window_glutin = "0.14.0"
+libloading = "0.3.2"
+
+[lib]
+crate-type = ["dylib"]
