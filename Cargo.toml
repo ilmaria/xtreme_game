@@ -10,5 +10,4 @@ gfx_window_glutin = "0.14.0"
 libloading = "0.3.2"
 
 [lib]
-name = "game_lib"
 crate-type = ["dylib"]

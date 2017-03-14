@@ -2,28 +2,42 @@
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
-extern crate libloading as lib;
+extern crate libloading;
 
-use std::path::PathBuf;
-use std::ffi;
+use std::path::{Path, PathBuf};
+use std::fs;
+use std::io;
+use std::time;
+use std::time::SystemTime;
+
+#[cfg(unix)]
+use libloading::os::unix::{Library, Symbol};
+#[cfg(windows)]
+use libloading::os::windows::{Library, Symbol};
 
 use gfx::Device;
+use gfx::format::{Rgba8, DepthStencil};
 
-pub type ColorFormat = gfx::format::Rgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
-
-fn game_lib(file: &str) -> PathBuf {
-    let mut lib_file = PathBuf::from(file);
-
-    if cfg!(target_os = "windows") {
-        lib_file.set_extension("dll");
-    } else if cfg!(target_os = "macos") {
-        lib_file.set_extension("dylib");
+fn has_been_modified(lib_path: &Path, last_modified_time: SystemTime) -> bool {
+    if let Ok(metadata) = lib_path.metadata() {
+        match metadata.modified() {
+            Ok(time) => time > last_modified_time,
+            Err(_) => false,
+        }
     } else {
-        lib_file.set_extension("so");
+        false
     }
+}
 
-    lib_file
+fn lib_last_modified(lib_path: &Path) -> SystemTime {
+    lib_path.metadata()
+        .and_then(|m| m.modified())
+        .unwrap()
+}
+
+fn copy_game_lib(lib_path: &Path) -> Result<u64, io::Error> {
+    let copy_path = lib_path.with_extension("module");
+    fs::copy(lib_path, copy_path)
 }
 
 pub fn main() {
@@ -33,22 +47,37 @@ pub fn main() {
         .with_vsync();
 
     let (window, mut device, mut _factory, _main_color, mut _main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+        gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
 
     let mut game_running = true;
 
-    let game_lib = game_lib("./target/debug/game_lib");
-    let game_lib_name = match game_lib.file_name() {
-        Some(name) => name,
-        None => &ffi::OsStr::new(""),
+    let game_lib = if cfg!(target_os = "windows") {
+        Path::new("./target/debug/xtreme_game.dll")
+    } else if cfg!(target_os = "macos") {
+        Path::new("./target/debug/libxtreme_game.dylib")
+    } else {
+        Path::new("./target/debug/libxtreme_game.so")
     };
 
-    let game_code = lib::Library::new(game_lib_name).unwrap();
-    let func: lib::Symbol<fn() -> String> = unsafe { game_code.get(b"hello").unwrap() };
-
-    println!("{}", func());
+    let game_module = game_lib.with_extension("module");
+    let mut game_code: Library;
+    let mut hello_func: Symbol<fn() -> String>;
+    let mut last_modified = time::UNIX_EPOCH;
 
     while game_running {
+        if has_been_modified(game_lib, last_modified) {
+            drop(game_code);
+            drop(hello_func);
+
+            let a = copy_game_lib(game_lib);
+            println!("{:?}", a);
+            game_code = Library::new(game_module.as_path()).unwrap();
+            hello_func = unsafe { game_code.get(b"hello").unwrap() };
+            last_modified = lib_last_modified(game_lib);
+
+            println!("{}", hello_func());
+        }
+
         for event in window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
