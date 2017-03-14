@@ -4,10 +4,12 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate libloading;
 
+pub mod hot_code_loading;
+pub mod game;
+
 use gfx::Device;
 use gfx::format::{Rgba8, DepthStencil};
 
-mod hot_code_loading;
 use hot_code_loading::GameLib;
 
 #[cfg(windows)]
@@ -43,6 +45,7 @@ pub fn main() {
                 last_modified = modified;
 
                 println!("{}", game_lib.hello());
+                println!("vec_test {:?}", game_lib.vec_test());
             }
         }
 

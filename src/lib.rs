@@ -1,1 +1,1 @@
-pub mod xtreme_game;
+pub mod game;

@@ -3,7 +3,9 @@ extern crate libloading;
 use std::path::Path;
 use std::fs;
 
-use libloading::Library;
+use self::libloading::Library;
+
+use super::game::math::Vec3;
 
 
 pub struct GameLib(Library);
@@ -18,6 +20,13 @@ impl GameLib {
     pub fn hello(&self) -> String {
         unsafe {
             let func = self.0.get::<fn() -> String>(b"hello").unwrap();
+            func()
+        }
+    }
+
+    pub fn vec_test(&self) -> Vec3 {
+        unsafe {
+            let func = self.0.get::<fn() -> Vec3>(b"vec_test").unwrap();
             func()
         }
     }
