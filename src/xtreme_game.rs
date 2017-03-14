@@ -1,4 +1,4 @@
 #[no_mangle]
 pub fn hello() -> String {
-    "Hello 2".to_string()
+    "Hello 1".to_string()
 }

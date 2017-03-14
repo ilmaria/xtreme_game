@@ -4,41 +4,19 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate libloading;
 
-use std::path::{Path, PathBuf};
-use std::fs;
-use std::io;
-use std::time;
-use std::time::SystemTime;
-
-#[cfg(unix)]
-use libloading::os::unix::{Library, Symbol};
-#[cfg(windows)]
-use libloading::os::windows::{Library, Symbol};
-
 use gfx::Device;
 use gfx::format::{Rgba8, DepthStencil};
 
-fn has_been_modified(lib_path: &Path, last_modified_time: SystemTime) -> bool {
-    if let Ok(metadata) = lib_path.metadata() {
-        match metadata.modified() {
-            Ok(time) => time > last_modified_time,
-            Err(_) => false,
-        }
-    } else {
-        false
-    }
-}
+mod hot_code_loading;
+use hot_code_loading::GameLib;
 
-fn lib_last_modified(lib_path: &Path) -> SystemTime {
-    lib_path.metadata()
-        .and_then(|m| m.modified())
-        .unwrap()
-}
+#[cfg(windows)]
+const LIB_PATH: &'static str = "./target/debug/xtreme_game.dll";
+#[cfg(linux)]
+const LIB_PATH: &'static str = "./target/debug/libxtreme_game.so";
+#[cfg(macos)]
+const LIB_PATH: &'static str = "./target/debug/libxtreme_game.dylib";
 
-fn copy_game_lib(lib_path: &Path) -> Result<u64, io::Error> {
-    let copy_path = lib_path.with_extension("module");
-    fs::copy(lib_path, copy_path)
-}
 
 pub fn main() {
     let builder = glutin::WindowBuilder::new()
@@ -51,31 +29,21 @@ pub fn main() {
 
     let mut game_running = true;
 
-    let game_lib = if cfg!(target_os = "windows") {
-        Path::new("./target/debug/xtreme_game.dll")
-    } else if cfg!(target_os = "macos") {
-        Path::new("./target/debug/libxtreme_game.dylib")
-    } else {
-        Path::new("./target/debug/libxtreme_game.so")
-    };
-
-    let game_module = game_lib.with_extension("module");
-    let mut game_code: Library;
-    let mut hello_func: Symbol<fn() -> String>;
-    let mut last_modified = time::UNIX_EPOCH;
+    let mut game_lib = GameLib::new(LIB_PATH);
+    let mut last_modified = std::fs::metadata(LIB_PATH)
+        .unwrap()
+        .modified()
+        .unwrap();
 
     while game_running {
-        if has_been_modified(game_lib, last_modified) {
-            drop(game_code);
-            drop(hello_func);
+        if let Ok(Ok(modified)) = std::fs::metadata(LIB_PATH).map(|m| m.modified()) {
+            if modified > last_modified {
+                drop(game_lib);
+                game_lib = GameLib::new(LIB_PATH);
+                last_modified = modified;
 
-            let a = copy_game_lib(game_lib);
-            println!("{:?}", a);
-            game_code = Library::new(game_module.as_path()).unwrap();
-            hello_func = unsafe { game_code.get(b"hello").unwrap() };
-            last_modified = lib_last_modified(game_lib);
-
-            println!("{}", hello_func());
+                println!("{}", game_lib.hello());
+            }
         }
 
         for event in window.poll_events() {
