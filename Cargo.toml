@@ -8,6 +8,7 @@ gfx = "0.14.0"
 glutin = "0.7.4"
 gfx_window_glutin = "0.14.0"
 libloading = "0.3.2"
+cgmath = "0.12.0"
 
 [lib]
 crate-type = ["dylib"]

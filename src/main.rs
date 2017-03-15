@@ -4,13 +4,13 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate libloading;
 
-pub mod hot_code_loading;
-pub mod game;
+pub mod code_reload;
+
 
 use gfx::Device;
 use gfx::format::{Rgba8, DepthStencil};
 
-use hot_code_loading::GameLib;
+use code_reload::GameLib;
 
 #[cfg(windows)]
 const LIB_PATH: &'static str = "./target/debug/xtreme_game.dll";
@@ -43,9 +43,6 @@ pub fn main() {
                 drop(game_lib);
                 game_lib = GameLib::new(LIB_PATH);
                 last_modified = modified;
-
-                println!("{}", game_lib.hello());
-                println!("vec_test {:?}", game_lib.vec_test());
             }
         }
 
@@ -56,6 +53,8 @@ pub fn main() {
                 _ => {}
             }
         }
+
+        game_lib.render_and_update(&window);
 
         window.swap_buffers().unwrap();
         device.cleanup();
