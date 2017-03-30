@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
@@ -10,7 +9,7 @@ pub mod code_reload;
 use gfx::Device;
 use gfx::format::{Rgba8, DepthStencil};
 
-use code_reload::GameLib;
+use code_reload::Game;
 
 #[cfg(windows)]
 const LIB_PATH: &'static str = "./target/debug/xtreme_game.dll";
@@ -26,22 +25,22 @@ pub fn main() {
         .with_dimensions(1024, 768)
         .with_vsync();
 
-    let (window, mut device, mut _factory, _main_color, mut _main_depth) =
+    let (window, mut device, mut factory, _main_color, mut _main_depth) =
         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
 
-    let mut game_running = true;
-
-    let mut game_lib = GameLib::new(LIB_PATH);
+    let mut game = Game::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH)
         .unwrap()
         .modified()
         .unwrap();
 
-    while game_running {
+    let mut encoder = factory.create_command_buffer().into();
+
+    'main: loop {
         if let Ok(Ok(modified)) = std::fs::metadata(LIB_PATH).map(|m| m.modified()) {
             if modified > last_modified {
-                drop(game_lib);
-                game_lib = GameLib::new(LIB_PATH);
+                drop(game);
+                game = Game::new(LIB_PATH);
                 last_modified = modified;
             }
         }
@@ -49,12 +48,12 @@ pub fn main() {
         for event in window.poll_events() {
             match event {
                 glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => game_running = false,
+                glutin::Event::Closed => break 'main,
                 _ => {}
             }
         }
 
-        game_lib.render_and_update(&window);
+        game.render_and_update(&mut encoder);
 
         window.swap_buffers().unwrap();
         device.cleanup();

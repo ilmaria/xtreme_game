@@ -2,22 +2,25 @@ use std::path::Path;
 use std::fs;
 
 use libloading::Library;
-use glutin::Window;
+use gfx;
 
 
-pub struct GameLib(Library);
+pub struct Game(Library);
 
-impl GameLib {
-    pub fn new(lib_path: &str) -> GameLib {
+impl Game {
+    pub fn new(lib_path: &str) -> Game {
         let lib_copy_path = Path::new(lib_path).with_extension("module");
         let _ = fs::copy(lib_path, lib_copy_path.to_owned());
-        GameLib(Library::new(lib_copy_path).unwrap())
+        Game(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render_and_update(&self, window: &Window) {
+    pub fn render_and_update<R, C>(&self, encoder: &mut gfx::Encoder<R, C>)
+        where R: gfx::Resources,
+              C: gfx::CommandBuffer<R>
+    {
         unsafe {
-            let func = self.0.get::<fn(&Window)>(b"render_and_update").unwrap();
-            func(window)
+            let func = self.0.get::<fn(&mut gfx::Encoder<R, C>)>(b"render_and_update_gl").unwrap();
+            func(encoder)
         }
     }
 }
