@@ -14,13 +14,16 @@ impl Game {
         Game(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render_and_update<R, C>(&self, encoder: &mut gfx::Encoder<R, C>)
+    pub fn render_and_update<R, C, F>(&self, encoder: &mut gfx::Encoder<R, C>, factory: &mut F)
         where R: gfx::Resources,
-              C: gfx::CommandBuffer<R>
+              C: gfx::CommandBuffer<R>,
+              F: gfx::Factory<R>
     {
         unsafe {
-            let func = self.0.get::<fn(&mut gfx::Encoder<R, C>)>(b"render_and_update_gl").unwrap();
-            func(encoder)
+            let func = self.0
+                .get::<fn(&mut gfx::Encoder<R, C>, &mut F)>(b"render_and_update_gl")
+                .unwrap();
+            func(encoder, factory)
         }
     }
 }

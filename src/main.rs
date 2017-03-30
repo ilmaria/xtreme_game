@@ -53,7 +53,7 @@ pub fn main() {
             }
         }
 
-        game.render_and_update(&mut encoder);
+        game.render_and_update(&mut encoder, &mut factory);
 
         window.swap_buffers().unwrap();
         device.cleanup();
