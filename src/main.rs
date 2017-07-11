@@ -11,28 +11,26 @@ use gfx::format::{Rgba8, DepthStencil};
 
 use code_reload::Game;
 
-#[cfg(windows)]
-const LIB_PATH: &'static str = "./target/debug/xtreme_game.dll";
-#[cfg(linux)]
-const LIB_PATH: &'static str = "./target/debug/libxtreme_game.so";
-#[cfg(macos)]
-const LIB_PATH: &'static str = "./target/debug/libxtreme_game.dylib";
+#[cfg(target_os = "windows")]
+const LIB_PATH: &str = "./target/debug/xtreme_game.dll";
+#[cfg(target_os = "linux")]
+const LIB_PATH: &str = "./target/debug/libxtreme_game.so";
+#[cfg(target_os = "macos")]
+const LIB_PATH: &str = "./target/debug/libxtreme_game.dylib";
 
 
 pub fn main() {
     let builder = glutin::WindowBuilder::new()
         .with_title("Xtreme Game".to_string())
         .with_dimensions(1024, 768)
+        .with_gl_robustness(glutin::Robustness::RobustLoseContextOnReset)
         .with_vsync();
 
     let (window, mut device, mut factory, _main_color, mut _main_depth) =
         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
 
     let mut game = Game::new(LIB_PATH);
-    let mut last_modified = std::fs::metadata(LIB_PATH)
-        .unwrap()
-        .modified()
-        .unwrap();
+    let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
 
     let mut encoder = factory.create_command_buffer().into();
 
