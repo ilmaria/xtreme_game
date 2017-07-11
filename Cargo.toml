@@ -4,12 +4,9 @@ version = "0.1.0"
 authors = ["Ilmari Autio <ilmari.autio@gmail.com>"]
 
 [dependencies]
-glutin = "0.7.4"
-gfx = "0.14.0"
-gfx_window_glutin = "0.14.0"
-gfx_device_gl = "0.13.0"
+glium = "0.16.0"
 libloading = "0.3.2"
-cgmath = "0.12.0"
+cgmath = "0.14.1"
 
 [lib]
 crate-type = ["dylib"]
