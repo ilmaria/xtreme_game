@@ -1,5 +1,9 @@
 use world::World;
 
 pub fn process_physics(world: &World, next_world: &mut World) {
-    next_world.delta_time = world.delta_time + 1.0;
+    //for state in &world.graphics_components {}
 }
+
+// fn integrate(state: component::Physics, dt: f32) -> component::Physics {
+//     let vel = state.momentum * state.inv_mass + (state.momentum / dt) * state.inv_mass;
+// }

@@ -10,6 +10,7 @@ use glium::DisplayBuild;
 use world::World;
 use code_reload::GameLib;
 use std::mem;
+use std::time;
 
 #[cfg(target_os = "windows")]
 const LIB_PATH: &str = "./target/debug/xtreme_game.dll";
@@ -32,7 +33,7 @@ pub fn main() {
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
 
     let mut world = World {
-        delta_time: 0.016,
+        delta_time: time::Duration::from_millis(16),
         physics_components: Vec::with_capacity(128),
         graphics_components: Vec::with_capacity(128),
         sound_components: Vec::with_capacity(128),
@@ -41,13 +42,16 @@ pub fn main() {
     };
 
     let mut next_world = World {
-        delta_time: 0.016,
+        delta_time: time::Duration::from_millis(16),
         physics_components: Vec::with_capacity(128),
         graphics_components: Vec::with_capacity(128),
         sound_components: Vec::with_capacity(128),
         ai_components: Vec::with_capacity(128),
         entities: Vec::with_capacity(128),
     };
+
+    let mut curr_time = time::Instant::now();
+    let mut time_accumulator = time::Duration::new(0, 0);
 
     'main: loop {
         if let Ok(Ok(modified)) = std::fs::metadata(LIB_PATH).map(|m| m.modified()) {
@@ -66,10 +70,27 @@ pub fn main() {
             }
         }
 
-        game.update(&world, &mut next_world);
-        mem::swap(&mut next_world, &mut world);
+        let new_time = time::Instant::now();
+        let mut frame_time = new_time - curr_time;
+
+        if frame_time > time::Duration::from_millis(250) {
+            frame_time = time::Duration::from_millis(250);
+        }
+
+        curr_time = new_time;
+        time_accumulator += frame_time;
+
+        while time_accumulator >= world.delta_time {
+            mem::swap(&mut next_world, &mut world);
+            game.update(&world, &mut next_world);
+            time_accumulator -= world.delta_time;
+        }
+
+        let alpha = time_accumulator.subsec_nanos() as f64 / world.delta_time.subsec_nanos() as f64;
+
+        game.interpolate(&world, &mut next_world, alpha);
 
         let frame = window.draw();
-        game.render(frame).unwrap();
+        game.render(frame, &next_world).unwrap();
     }
 }

@@ -14,12 +14,12 @@ impl GameLib {
         GameLib(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render(&self, frame: Frame) -> Result<(), SwapBuffersError> {
+    pub fn render(&self, frame: Frame, world: &World) -> Result<(), SwapBuffersError> {
         unsafe {
             let func = self.0
-                .get::<fn(Frame) -> Result<(), SwapBuffersError>>(b"render")
+                .get::<fn(Frame, &World) -> Result<(), SwapBuffersError>>(b"render")
                 .unwrap();
-            func(frame)
+            func(frame, world)
         }
     }
 
@@ -27,6 +27,15 @@ impl GameLib {
         unsafe {
             let func = self.0.get::<fn(&World, &mut World)>(b"update").unwrap();
             func(world, next_world)
+        }
+    }
+
+    pub fn interpolate(&self, world: &World, next_world: &mut World, alpha: f64) {
+        unsafe {
+            let func = self.0
+                .get::<fn(&World, &mut World, alpha: f64)>(b"interpolate")
+                .unwrap();
+            func(world, next_world, alpha)
         }
     }
 }
