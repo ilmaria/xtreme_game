@@ -1,8 +1,8 @@
 use std::path::Path;
 use std::fs;
-
 use glium::{Frame, SwapBuffersError};
 use libloading::Library;
+use world::World;
 
 
 pub struct GameLib(Library);
@@ -20,6 +20,13 @@ impl GameLib {
                 .get::<fn(Frame) -> Result<(), SwapBuffersError>>(b"render")
                 .unwrap();
             func(frame)
+        }
+    }
+
+    pub fn update(&self, world: &World, next_world: &mut World) {
+        unsafe {
+            let func = self.0.get::<fn(&World, &mut World)>(b"update").unwrap();
+            func(world, next_world)
         }
     }
 }
