@@ -10,6 +10,7 @@ use glium::DisplayBuild;
 use world::World;
 use code_reload::GameLib;
 use std::mem;
+use std::cmp;
 use std::time;
 
 #[cfg(target_os = "windows")]
@@ -34,20 +35,20 @@ pub fn main() {
 
     let mut world = World {
         delta_time: time::Duration::from_millis(16),
-        physics_components: Vec::with_capacity(128),
-        graphics_components: Vec::with_capacity(128),
-        sound_components: Vec::with_capacity(128),
-        ai_components: Vec::with_capacity(128),
-        entities: Vec::with_capacity(128),
+        physics_components: Vec::with_capacity(1024),
+        graphics_components: Vec::with_capacity(1024),
+        sound_components: Vec::with_capacity(1024),
+        ai_components: Vec::with_capacity(1024),
+        entities: Vec::with_capacity(1024),
     };
 
     let mut next_world = World {
         delta_time: time::Duration::from_millis(16),
-        physics_components: Vec::with_capacity(128),
-        graphics_components: Vec::with_capacity(128),
-        sound_components: Vec::with_capacity(128),
-        ai_components: Vec::with_capacity(128),
-        entities: Vec::with_capacity(128),
+        physics_components: Vec::with_capacity(1024),
+        graphics_components: Vec::with_capacity(1024),
+        sound_components: Vec::with_capacity(1024),
+        ai_components: Vec::with_capacity(1024),
+        entities: Vec::with_capacity(1024),
     };
 
     let mut curr_time = time::Instant::now();
@@ -71,12 +72,7 @@ pub fn main() {
         }
 
         let new_time = time::Instant::now();
-        let mut frame_time = new_time - curr_time;
-
-        if frame_time > time::Duration::from_millis(250) {
-            frame_time = time::Duration::from_millis(250);
-        }
-
+        let frame_time = cmp::min(new_time - curr_time, time::Duration::from_millis(250));
         curr_time = new_time;
         time_accumulator += frame_time;
 
@@ -87,7 +83,6 @@ pub fn main() {
         }
 
         let alpha = time_accumulator.subsec_nanos() as f64 / world.delta_time.subsec_nanos() as f64;
-
         game.interpolate(&world, &mut next_world, alpha);
 
         let frame = window.draw();
