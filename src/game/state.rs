@@ -1,8 +1,10 @@
-use component;
+use std::default::Default;
 use std::time;
 
-#[derive(Debug)]
-pub struct World {
+use super::component;
+
+#[derive(Debug, Default)]
+pub struct State {
     pub delta_time: time::Duration,
     pub physics_components: Vec<component::Physics>,
     pub graphics_components: Vec<component::Graphics>,

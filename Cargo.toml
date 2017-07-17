@@ -4,9 +4,13 @@ version = "0.1.0"
 authors = ["Ilmari Autio <ilmari.autio@gmail.com>"]
 
 [dependencies]
-glium = "0.16.0"
-libloading = "0.3.2"
-cgmath = "0.14.1"
+vulkano = "0.5"
+vulkano-win = "0.5"
+vulkano-shaders = "0.5"
+glsl-to-spirv = "0.1"
+winit = "0.7"
+libloading = "0.3"
+cgmath = "0.14"
 
 [lib]
 crate-type = ["dylib"]
