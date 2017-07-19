@@ -4,9 +4,7 @@ version = "0.1.0"
 authors = ["Ilmari Autio <ilmari.autio@gmail.com>"]
 
 [dependencies]
-vulkano = "0.5"
-vulkano-win = "0.5"
-vulkano-shaders = "0.5"
+ash = "0.18"
 glsl-to-spirv = "0.1"
 winit = "0.7"
 libloading = "0.3"

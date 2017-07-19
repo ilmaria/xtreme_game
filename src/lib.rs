@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate vulkano;
+extern crate ash;
 extern crate cgmath;
 
 pub mod game;

@@ -1,27 +1,13 @@
 extern crate libloading;
 extern crate cgmath;
-extern crate vulkano;
-extern crate vulkano_win;
-extern crate vulkano_shaders;
-extern crate glsl_to_spirv;
+extern crate ash;
 extern crate winit;
 
 pub mod os_platform;
 pub mod game;
 
-use vulkano_win::VkSurfaceBuild;
-use vulkano as vk;
-use vk::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vk::command_buffer::{AutoCommandBufferBuilder, DynamicState};
-use vk::device::Device;
-use vk::framebuffer::{Framebuffer, Subpass};
-use vk::instance::Instance;
-use vk::pipeline::GraphicsPipeline;
-use vk::pipeline::viewport::Viewport;
-use vk::swapchain;
-use vk::swapchain::{PresentMode, SurfaceTransform, Swapchain};
-use vk::sync::now;
-use vk::sync::GpuFuture;
+#[macro_use]
+use ash::vk;
 use winit::{VirtualKeycode, Event, WindowEvent};
 
 use std::mem;
@@ -41,14 +27,14 @@ const LIB_PATH: &str = "./target/debug/libxtreme_game.dylib";
 
 
 pub fn main() {
-    let (instance, device, queue, swapchain, render_pass, pipeline, framebuffers, vertex_buffer) =
-        os_platform::vulkan::init_vulkan().unwrap();
-
     let mut events_loop = winit::EventsLoop::new();
     let window = winit::WindowBuilder::new()
         .with_title("Xtreme Game")
         .with_dimensions(1024, 768)
-        .build_vk_surface(&events_loop, instance.clone())?;
+        .build()
+        .unwrap();
+
+    os_platform::init_vulkan();
 
     let mut game = GameLib::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
