@@ -8,6 +8,8 @@ use winit;
 
 use std::ptr;
 use std::default::Default;
+use std::fs::File;
+use std::path::Path;
 
 use game::vulkan::Vertex;
 use game::vulkan::RenderParams;
@@ -362,6 +364,37 @@ fn create_depth_view(device: &Device<V1_0>,
 
 fn create_pipeline() {
 
+}
+
+fn create_shader_module(path: Path) {
+    let shader_file = File::open();
+
+    let vertex_bytes: Vec<u8> = vertex_spv_file
+        .bytes()
+        .filter_map(|byte| byte.ok())
+        .collect();
+    let vertex_shader_info = vk::ShaderModuleCreateInfo {
+        s_type: vk::StructureType::ShaderModuleCreateInfo,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        code_size: vertex_bytes.len(),
+        p_code: vertex_bytes.as_ptr() as *const u32,
+    };
+    let frag_bytes: Vec<u8> = frag_spv_file.bytes().filter_map(|byte| byte.ok()).collect();
+    let frag_shader_info = vk::ShaderModuleCreateInfo {
+        s_type: vk::StructureType::ShaderModuleCreateInfo,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        code_size: frag_bytes.len(),
+        p_code: frag_bytes.as_ptr() as *const u32,
+    };
+    let vertex_shader_module = base.device
+        .create_shader_module(&vertex_shader_info, None)
+        .expect("Vertex shader module error");
+
+    let fragment_shader_module = base.device
+        .create_shader_module(&frag_shader_info, None)
+        .expect("Fragment shader module error");
 }
 
 unsafe extern "system" fn vulkan_debug_callback(
