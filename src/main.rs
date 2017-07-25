@@ -1,21 +1,21 @@
+#[macro_use]
+extern crate ash;
 extern crate libloading;
 extern crate cgmath;
-extern crate ash;
 extern crate winit;
+extern crate glsl_to_spirv;
 
 pub mod os_platform;
 pub mod game;
 
-#[macro_use]
 use ash::vk;
-use winit::{VirtualKeycode, Event, WindowEvent};
+use winit::{Event, WindowEvent};
 
 use std::mem;
 use std::cmp;
 use std::time;
 
 use game::state::State;
-use game::vulkan::RenderParams;
 use os_platform::code_reload::GameLib;
 
 #[cfg(target_os = "windows")]
@@ -45,8 +45,6 @@ pub fn main() {
     let mut curr_time = time::Instant::now();
     let mut time_accumulator = time::Duration::new(0, 0);
 
-    let mut previous_frame = Box::new(now(device.clone())) as Box<GpuFuture>;
-
     'main: loop {
         if let Ok(Ok(modified)) = std::fs::metadata(LIB_PATH).map(|m| m.modified()) {
             if modified > last_modified {
@@ -57,13 +55,8 @@ pub fn main() {
         }
 
         events_loop.poll_events(|event| match event {
-            Event::WindowEvent {
-                event: WindowEvent::KeyboardInput {
-                    input: KeyboardInput { virtual_keycode: Some(VirtualKeycode::Escape), .. }, ..
-                },
-                ..
-            } |
-            Event::WindowEvent { event: WindowEvent::Closed, .. } => break 'main,
+            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
+            winit::Event::Closed => break 'main,
             _ => (),
         });
 
@@ -81,19 +74,19 @@ pub fn main() {
         let alpha = time_accumulator.subsec_nanos() as f64 / state.delta_time.subsec_nanos() as f64;
         game.interpolate(&state, &mut next_state, alpha);
 
-        previous_frame.cleanup_finished();
+        // previous_frame.cleanup_finished();
 
-        let future = game.render(RenderParams {
-            device.clone(),
-            queue.clone(),
-            swapchain.clone(),
-            render_pass.clone(),
-            pipeline.clone(),
-            &framebuffers,
-            &vertex_buffer,
-            previous_frame,
-        }, &next_state).unwrap();
+        // let future = game.render(RenderParams {
+        //     device.clone(),
+        //     queue.clone(),
+        //     swapchain.clone(),
+        //     render_pass.clone(),
+        //     pipeline.clone(),
+        //     &framebuffers,
+        //     &vertex_buffer,
+        //     previous_frame,
+        // }, &next_state).unwrap();
 
-        previous_frame = Box::new(future) as Box<_>;
+        // previous_frame = Box::new(future) as Box<_>;
     }
 }

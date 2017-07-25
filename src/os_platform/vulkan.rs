@@ -5,14 +5,15 @@ use ash::Device;
 use ash::version::{V1_0, InstanceV1_0, DeviceV1_0, EntryV1_0};
 use ash::extensions::{Swapchain, XlibSurface, Surface, DebugReport, Win32Surface};
 use winit;
+use glsl_to_spirv;
 
 use std::ptr;
+use std::u32;
 use std::default::Default;
 use std::fs::File;
 use std::path::Path;
-
-use game::vulkan::Vertex;
-use game::vulkan::RenderParams;
+use std::error::Error;
+use std::ffi::CString;
 
 pub fn init_vulkan(window_width: u32, window_height: u32) -> Result<(), Box<Error>> {
     let entry = Entry::new()?;
@@ -47,7 +48,7 @@ fn create_instance(entry: &Entry<V1_0>) -> Result<Instance<V1_0>, Box<Error>> {
 
     let os_surface = if cfg!(windows) {
         Win32Surface::name()
-    } else if cfg!(all(unix, not(target_os = "android"))) {
+    } else /*if cfg!(all(unix, not(target_os = "android")))*/ {
         XlibSurface::name()
     };
 
@@ -64,11 +65,12 @@ fn create_instance(entry: &Entry<V1_0>) -> Result<Instance<V1_0>, Box<Error>> {
         p_application_info: &appinfo,
         pp_enabled_layer_names: layers_names_raw.as_ptr(),
         enabled_layer_count: layers_names_raw.len() as u32,
-        pp_enabled_extension_names: extension_names_raw.as_ptr(),
-        enabled_extension_count: extension_names_raw.len() as u32,
+        pp_enabled_extension_names: extension_names.as_ptr(),
+        enabled_extension_count: extension_names.len() as u32,
     };
 
-    entry.create_instance(&create_info, None)
+    let instance = entry.create_instance(&create_info, None)?;
+    Ok(instance)
 }
 
 fn set_debug_callback(entry: &Entry<V1_0>, instance: &Instance<V1_0>) -> Result<vk::DebugReportCallbackEXT, Box<Error>>{
@@ -81,8 +83,9 @@ fn set_debug_callback(entry: &Entry<V1_0>, instance: &Instance<V1_0>) -> Result<
         pfn_callback: vulkan_debug_callback,
         p_user_data: ptr::null_mut(),
     };
-    let debug_report_loader = DebugReport::new(entry, instance)?;
-    debug_report_loader.create_debug_report_callback_ext(&debug_info, None)
+    let debug_report_loader = DebugReport::new(entry, instance).unwrap();
+    let callback = debug_report_loader.create_debug_report_callback_ext(&debug_info, None)?;
+    Ok(callback)
 }
 
 #[cfg(all(unix, not(target_os = "android")))]
@@ -91,8 +94,8 @@ unsafe fn create_surface(entry: &Entry<V1_0>,
                   window: &winit::Window)
                   -> Result<vk::SurfaceKHR, Box<Error>> {
     use winit::os::unix::WindowExt;
-    let x11_display = window.get_xlib_display()?;
-    let x11_window = window.get_xlib_window()?;
+    let x11_display = window.get_xlib_display().unwrap();
+    let x11_window = window.get_xlib_window().unwrap();
     let x11_create_info = vk::XlibSurfaceCreateInfoKHR {
         s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
         p_next: ptr::null(),
@@ -100,8 +103,10 @@ unsafe fn create_surface(entry: &Entry<V1_0>,
         window: x11_window as vk::Window,
         dpy: x11_display as *mut vk::Display,
     };
-    let xlib_surface_loader = XlibSurface::new(entry, instance)?;
-    xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)
+    let xlib_surface_loader = XlibSurface::new(entry, instance)
+        .expect("Unable to load xlib surface");
+    let surface = xlib_surface_loader.create_xlib_surface_khr(&x11_create_info, None)?;
+    Ok(surface)
 }
 
 #[cfg(windows)]
@@ -125,9 +130,10 @@ unsafe fn create_surface(entry: &Entry<V1_0>,
 fn pick_physical_device(instance: &Instance<V1_0>,
                         surface: vk::SurfaceKHR,
                         surface_loader: Surface)
-                        -> Result<(vk::types::PhysicalDevice, u32), Box<Error>> {
-    let physical_devices = instance.enumerate_physical_devices()?;
-    physical_devices.iter()
+                        -> Result<(vk::PhysicalDevice, usize), Box<Error>> {
+    let device = instance
+        .enumerate_physical_devices()?
+        .iter()
         .map(|device| {
             instance.get_physical_device_queue_family_properties(*device)
                 .iter()
@@ -135,7 +141,7 @@ fn pick_physical_device(instance: &Instance<V1_0>,
                 .filter_map(|(index, ref info)| {
                     let supports_graphic_and_surface =
                         info.queue_flags.subset(vk::QUEUE_GRAPHICS_BIT) &&
-                        surface_loader.get_physical_device_surface_support_khr(*device, index, surface);
+                        surface_loader.get_physical_device_surface_support_khr(*device, index as u32, surface);
                     match supports_graphic_and_surface {
                         true => Some((*device, index)),
                         _ => None,
@@ -145,9 +151,12 @@ fn pick_physical_device(instance: &Instance<V1_0>,
         })
         .filter_map(|v| v)
         .nth(0)
+        .ok_or("Couldn't find suitable device.")?;
+    Ok(device)
 }
 
 fn create_logical_device(physical_device: vk::types::PhysicalDevice,
+                         instance: Instance<V1_0>,
                          queue_family_index: u32)
                          -> Result<Device<V1_0>, Box<Error>> {
     let device_extension_names = [Swapchain::name().as_ptr()];
@@ -182,12 +191,14 @@ fn create_logical_device(physical_device: vk::types::PhysicalDevice,
 
 fn create_swapchain(device: &Device<V1_0>,
                     instance: &Instance<V1_0>,
+                    window_width: u32,
+                    window_height: u32,
                     physical_device: vk::types::PhysicalDevice,
                     surface: vk::SurfaceKHR,
                     surface_loader: Surface)
                     -> Result<vk::SwapchainKHR, Box<Error>> {
     let surface_format = surface_loader
-        .get_physical_device_surface_formats_khr(device, surface)?
+        .get_physical_device_surface_formats_khr(physical_device, surface)?
         .iter()
         .map(|sfmt| {
             match sfmt.format {
@@ -200,7 +211,8 @@ fn create_swapchain(device: &Device<V1_0>,
                 _ => sfmt.clone(),
             }
         })
-        .nth(0)?;
+        .nth(0)
+        .unwrap();
 
     let surface_capabilities = surface_loader
         .get_physical_device_surface_capabilities_khr(physical_device, surface)?;
@@ -212,7 +224,7 @@ fn create_swapchain(device: &Device<V1_0>,
     }
     let surface_resolution =
         match surface_capabilities.current_extent.width {
-            std::u32::MAX => {
+            u32::MAX => {
                 vk::Extent2D {
                     width: window_width,
                     height: window_height,
@@ -235,7 +247,8 @@ fn create_swapchain(device: &Device<V1_0>,
         .find(|&mode| mode == vk::PresentModeKHR::Mailbox)
         .unwrap_or(vk::PresentModeKHR::Fifo);
 
-    let swapchain_loader = Swapchain::new(instance, device)?;
+    let swapchain_loader = Swapchain::new(instance, device)
+        .expect("Unable to load swapchain");
     let swapchain_create_info = vk::SwapchainCreateInfoKHR {
         s_type: vk::StructureType::SwapchainCreateInfoKhr,
         p_next: ptr::null(),
@@ -261,10 +274,11 @@ fn create_swapchain(device: &Device<V1_0>,
 }
 
 fn create_image_views(device: &Device<V1_0>,
+                      surface_format: vk::SurfaceFormatKHR,
                       swapchain: vk::SwapchainKHR,
                       swapchain_loader: Swapchain)
                       -> Result<Vec<vk::ImageView>, Box<Error>> {
-    swapchain_loader
+    let image_views: Vec<vk::ImageView> = swapchain_loader
         .get_swapchain_images_khr(swapchain)?
         .iter()
         .map(|&image| {
@@ -276,7 +290,7 @@ fn create_image_views(device: &Device<V1_0>,
                 format: surface_format.format,
                 components: vk::ComponentMapping {
                     r: vk::ComponentSwizzle::Identity,
-                    g: vk::ComponentSwizzle::IdentityG,
+                    g: vk::ComponentSwizzle::Identity,
                     b: vk::ComponentSwizzle::Identity,
                     a: vk::ComponentSwizzle::Identity,
                 },
@@ -289,14 +303,17 @@ fn create_image_views(device: &Device<V1_0>,
                 },
                 image: image,
             };
-            device.create_image_view(&create_view_info, None)?
+            device.create_image_view(&create_view_info, None).unwrap()
         })
-        .collect()
+        .collect();
+
+    Ok(image_views)
 }
 
 fn create_depth_view(device: &Device<V1_0>,
                       instance: &Instance<V1_0>,
                       physical_device: vk::types::PhysicalDevice,
+                      surface_format: vk::SurfaceFormatKHR,
                       surface_resolution: vk::types::Extent2D)
                       -> Result<vk::ImageView, Box<Error>> {
     let depth_image_create_info = vk::ImageCreateInfo {
@@ -324,9 +341,11 @@ fn create_depth_view(device: &Device<V1_0>,
 
     let device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
     let depth_image_memory_req = device.get_image_memory_requirements(depth_image);
-    let depth_image_memory_index = find_memorytype_index(&depth_image_memory_req,
-                                                         &device_memory_properties,
-                                                         vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT)?;
+    let depth_image_memory_index = find_memorytype_index(
+        &depth_image_memory_req,
+        &device_memory_properties,
+        vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    ).expect("Unable to find suitable memory index for depth image.");
 
     let depth_image_allocate_info = vk::MemoryAllocateInfo {
         s_type: vk::StructureType::MemoryAllocateInfo,
@@ -362,39 +381,93 @@ fn create_depth_view(device: &Device<V1_0>,
     device.create_image_view(&depth_image_view_info, None)?
 }
 
-fn create_pipeline() {
+fn create_pipeline(device: &Device<V1_0>) -> Result<vk::types::ShaderModule, Box<Error>> {
+    let vert_shader = create_shader_module(&device, "data/shaders/cube.vert", glsl_to_spirv::ShaderType::Vertex)?;
+    let frag_shader = create_shader_module(&device, "data/shaders/cube.frag", glsl_to_spirv::ShaderType::Fragment)?;
 
+    let entry_name = CString::new("main")?;
+    let vert_shader_stage_info = vk::PipelineShaderStageCreateInfo {
+        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        module: vert_shader,
+        p_name: entry_name.as_ptr(),
+        p_specialization_info: ptr::null(),
+        stage: vk::SHADER_STAGE_VERTEX_BIT,
+    };
+    let frag_shader_stage_info = vk::PipelineShaderStageCreateInfo {
+        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        module: frag_shader,
+        p_name: entry_name.as_ptr(),
+        p_specialization_info: ptr::null(),
+        stage: vk::SHADER_STAGE_FRAGMENT_BIT,
+    };
 }
 
-fn create_shader_module(path: Path) {
-    let shader_file = File::open();
+fn create_shader_module(device: &Device<V1_0>, path: Path, shader_type: glsl_to_spirv::ShaderType) -> Result<vk::types::ShaderModule, Box<Error>> {
+    let shader_bytes = {
+        let shader_file = File::open(path);
+        let mut bytes = Vec::new();
+        shader_file.read_to_end(&mut bytes)?;
+        bytes
+    };
 
-    let vertex_bytes: Vec<u8> = vertex_spv_file
+    let spv_file = glsl_to_spirv::compile(shader_bytes, shader_type)?;
+
+    let spv_bytes: Vec<u8> = spv_file
         .bytes()
         .filter_map(|byte| byte.ok())
         .collect();
-    let vertex_shader_info = vk::ShaderModuleCreateInfo {
-        s_type: vk::StructureType::ShaderModuleCreateInfo,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        code_size: vertex_bytes.len(),
-        p_code: vertex_bytes.as_ptr() as *const u32,
-    };
-    let frag_bytes: Vec<u8> = frag_spv_file.bytes().filter_map(|byte| byte.ok()).collect();
-    let frag_shader_info = vk::ShaderModuleCreateInfo {
-        s_type: vk::StructureType::ShaderModuleCreateInfo,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        code_size: frag_bytes.len(),
-        p_code: frag_bytes.as_ptr() as *const u32,
-    };
-    let vertex_shader_module = base.device
-        .create_shader_module(&vertex_shader_info, None)
-        .expect("Vertex shader module error");
 
-    let fragment_shader_module = base.device
-        .create_shader_module(&frag_shader_info, None)
-        .expect("Fragment shader module error");
+    let shader_info = vk::ShaderModuleCreateInfo {
+        s_type: vk::StructureType::ShaderModuleCreateInfo,
+        p_next: ptr::null(),
+        flags: Default::default(),
+        code_size: spv_bytes.len(),
+        p_code: spv_bytes.as_ptr() as *const u32,
+    };
+
+    device.create_shader_module(&shader_info, None)
+}
+
+fn find_memorytype_index(memory_req: &vk::MemoryRequirements,
+                         memory_prop: &vk::PhysicalDeviceMemoryProperties,
+                         flags: vk::MemoryPropertyFlags)
+                         -> Option<u32> {
+    // Try to find an exactly matching memory flag
+    let best_suitable_index =
+        find_memorytype_index_f(memory_req,
+                                memory_prop,
+                                flags,
+                                |property_flags, flags| property_flags == flags);
+    if best_suitable_index.is_some() {
+        return best_suitable_index;
+    }
+    // Otherwise find a memory flag that works
+    find_memorytype_index_f(memory_req,
+                            memory_prop,
+                            flags,
+                            |property_flags, flags| property_flags & flags == flags)
+}
+
+fn find_memorytype_index_f<F: Fn(vk::MemoryPropertyFlags, vk::MemoryPropertyFlags) -> bool>
+    (memory_req: &vk::MemoryRequirements,
+     memory_prop: &vk::PhysicalDeviceMemoryProperties,
+     flags: vk::MemoryPropertyFlags,
+     f: F)
+     -> Option<u32> {
+    let mut memory_type_bits = memory_req.memory_type_bits;
+    for (index, ref memory_type) in memory_prop.memory_types.iter().enumerate() {
+        if memory_type_bits & 1 == 1 {
+            if f(memory_type.property_flags, flags) {
+                return Some(index as u32);
+            }
+        }
+        memory_type_bits = memory_type_bits >> 1;
+    }
+    None
 }
 
 unsafe extern "system" fn vulkan_debug_callback(

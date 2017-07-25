@@ -1,4 +1,4 @@
 pub mod code_reload;
 pub mod vulkan;
 
-pub use vulkan::init_vulkan;
+pub use self::vulkan::init_vulkan;

@@ -1,11 +1,10 @@
-use vulkano::sync::GpuFuture;
 use libloading::Library;
 
 use std::path::Path;
 use std::fs;
+use std::error::Error;
 
-use state::State;
-use game::vulkan::RenderParams;
+use game::state::State;
 
 pub struct GameLib(Library);
 
@@ -16,16 +15,12 @@ impl GameLib {
         GameLib(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render(
-        &self,
-        render_params: RenderParams,
-        state: &State,
-    ) -> Result<GpuFuture, Box<Error>> {
+    pub fn render(&self, state: &State) -> Result<String, Box<Error>> {
         unsafe {
             let func = self.0
-                .get::<fn(RenderParams, &State) -> Result<GpuFuture, Box<Error>>>(b"render")
+                .get::<fn(&State) -> Result<String, Box<Error>>>(b"render")
                 .unwrap();
-            func(render_params, state)
+            func(state)
         }
     }
 
