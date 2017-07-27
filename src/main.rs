@@ -9,7 +9,7 @@ pub mod os_platform;
 pub mod game;
 
 use ash::vk;
-use winit::{Event, WindowEvent};
+use winit::{KeyboardInput, VirtualKeyCode, Event, WindowEvent};
 
 use std::mem;
 use std::cmp;
@@ -31,10 +31,10 @@ pub fn main() {
     let window = winit::WindowBuilder::new()
         .with_title("Xtreme Game")
         .with_dimensions(1024, 768)
-        .build()
+        .build(&events_loop)
         .unwrap();
 
-    os_platform::init_vulkan();
+    os_platform::init_vulkan(1024, 768);
 
     let mut game = GameLib::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
@@ -45,7 +45,8 @@ pub fn main() {
     let mut curr_time = time::Instant::now();
     let mut time_accumulator = time::Duration::new(0, 0);
 
-    'main: loop {
+    let mut game_is_running = true;
+    while game_is_running {
         if let Ok(Ok(modified)) = std::fs::metadata(LIB_PATH).map(|m| m.modified()) {
             if modified > last_modified {
                 drop(game);
@@ -55,8 +56,13 @@ pub fn main() {
         }
 
         events_loop.poll_events(|event| match event {
-            winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-            winit::Event::Closed => break 'main,
+            Event::WindowEvent {
+                event: WindowEvent::KeyboardInput {
+                    input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), .. }, ..
+                },
+                ..
+            } |
+            Event::WindowEvent { event: WindowEvent::Closed, .. } => game_is_running = false,
             _ => (),
         });
 
