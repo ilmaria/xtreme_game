@@ -34,7 +34,7 @@ pub fn main() {
         .build(&events_loop)
         .unwrap();
 
-    os_platform::init_vulkan(1024, 768);
+    os_platform::init_vulkan(&window, 1024, 768);
 
     let mut game = GameLib::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
