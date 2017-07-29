@@ -6,119 +6,114 @@ use std::ptr;
 use std::u32;
 use std::error::Error;
 
-use super::EntryV10;
-use super::InstanceV10;
-use super::SurfaceDetails;
-use super::physical_device::pick_physical_device;
+use super::Renderer;
+use super::RendererError;
 
-pub fn create_surface(
-    entry: &EntryV10,
-    instance: &InstanceV10,
-    window: &winit::Window,
-    window_width: u32,
-    window_height: u32,
-) -> Result<SurfaceDetails, Box<Error>> {
-    let surface_khr = create_surface_khr(entry, instance, window)?;
+impl Renderer {
+    pub fn create_surface_loader(&mut self) -> Result<&mut Renderer, Box<Error>> {
+        let entry = self.entry.ok_or(RendererError::NoEntry)?;
+        let instance = self.instance.ok_or(RendererError::NoInstance)?;
 
-    let loader = Surface::new(entry, instance).map_err(
-        |_| "Couldn't create surface loader",
-    )?;
+        let loader = Surface::new(&entry, &instance).map_err(
+            |_| "Couldn't create surface loader",
+        )?;
 
-    let (physical_device, _queue_family_index) =
-        pick_physical_device(&instance, &surface_khr, &loader)?;
+        self.surface_loader = Some(loader);
 
-    let format = choose_surface_format(physical_device, &surface_khr, &loader)?;
+        Ok(self)
+    }
 
-    let capabilities = loader.get_physical_device_surface_capabilities_khr(
-        physical_device,
-        surface_khr,
-    )?;
+    #[cfg(all(unix, not(target_os = "android")))]
+    pub fn create_surface(&mut self) -> Result<&mut Renderer, Box<Error>> {
+        use winit::os::unix::WindowExt;
 
-    let resolution = match capabilities.clone().current_extent.width {
-        u32::MAX => {
-            vk::Extent2D {
-                width: window_width,
-                height: window_height,
-            }
-        }
-        _ => capabilities.clone().current_extent,
-    };
+        let entry = self.entry.ok_or(RendererError::NoEntry)?;
+        let instance = self.instance.ok_or(RendererError::NoInstance)?;
+        let window = self.window.ok_or(RendererError::NoWindow)?;
 
-    Ok(SurfaceDetails {
-        khr: surface_khr,
-        loader: loader,
-        format: format,
-        capabilities: capabilities,
-        resolution: resolution,
-    })
-}
+        let x11_display = window.get_xlib_display().ok_or("Couldn't get xlib display")?;
+        let x11_window = window.get_xlib_window().ok_or("Couldn't get xlib window")?;
 
-#[cfg(all(unix, not(target_os = "android")))]
-fn create_surface_khr(
-    entry: &EntryV10,
-    instance: &InstanceV10,
-    window: &winit::Window,
-) -> Result<vk::SurfaceKHR, Box<Error>> {
-    use winit::os::unix::WindowExt;
-    let x11_display = window.get_xlib_display().ok_or("Couldn't get xlib display")?;
-    let x11_window = window.get_xlib_window().ok_or("Couldn't get xlib window")?;
-    let x11_create_info = vk::XlibSurfaceCreateInfoKHR {
-        s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        window: x11_window as vk::Window,
-        dpy: x11_display as *mut vk::Display,
-    };
-    let xlib_surface_loader = XlibSurface::new(entry, instance).map_err(
-        |_| "Unable to load xlib surface",
-    )?;
-    let surface = unsafe {
-        xlib_surface_loader.create_xlib_surface_khr(
-            &x11_create_info,
-            None,
-        )?
-    };
-    Ok(surface)
-}
+        let x11_create_info = vk::XlibSurfaceCreateInfoKHR {
+            s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: Default::default(),
+            window: x11_window as vk::Window,
+            dpy: x11_display as *mut vk::Display,
+        };
 
-#[cfg(windows)]
-fn create_surface_khr(
-    entry: &Entry<V1_0>,
-    instance: &InstanceV10,
-    window: &winit::Window,
-) -> Result<vk::SurfaceKHR, Box<Error>> {
-    use winit::os::windows::WindowExt;
-    let hwnd = window.get_hwnd();
-    let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
-        s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
-        p_next: ptr::null(),
-        flags: Default::default(),
-        hinstance: ptr::null(),
-        hwnd: hwnd as *const (),
-    };
-    let win32_surface_loader = Win32Surface::new(entry, instance)?;
-    win32_surface_loader.create_win32_surface_khr(&win32_create_info, None)
-}
+        let xlib_surface_loader = XlibSurface::new(&entry, &instance).map_err(
+            |_| "Unable to load xlib surface",
+        )?;
 
-fn choose_surface_format(
-    physical_device: vk::types::PhysicalDevice,
-    surface_khr: &vk::SurfaceKHR,
-    surface_loader: &Surface,
-) -> Result<vk::SurfaceFormatKHR, Box<Error>> {
-    let surface_format = surface_loader
-        .get_physical_device_surface_formats_khr(physical_device, surface_khr.clone())?
-        .iter()
-        .map(|sfmt| match sfmt.format {
-            vk::Format::Undefined => {
-                vk::SurfaceFormatKHR {
-                    format: vk::Format::B8g8r8Unorm,
-                    color_space: sfmt.color_space,
+        let surface = unsafe {
+            xlib_surface_loader.create_xlib_surface_khr(
+                &x11_create_info,
+                None,
+            )?
+        };
+
+        self.surface = Some(surface);
+
+        Ok(self)
+    }
+
+    #[cfg(windows)]
+    pub fn create_surface(&mut self) -> Result<&mut Renderer, Box<Error>> {
+        use winit::os::windows::WindowExt;
+
+        let entry = self.entry.ok_or(RendererError::NoEntry)?;
+        let instance = self.instance.ok_or(RendererError::NoInstance)?;
+        let window = self.window.ok_or(RendererError::NoWindow)?;
+
+        let hwnd = window.get_hwnd().ok_or("Couldn't get window hwnd")?;
+
+        let win32_create_info = vk::Win32SurfaceCreateInfoKHR {
+            s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: Default::default(),
+            hinstance: ptr::null(),
+            hwnd: hwnd as *const (),
+        };
+
+        let win32_surface_loader = Win32Surface::new(&entry, &instance).map_err(
+            |_| "Unable to load xlib surface",
+        )?;
+
+        let surface = unsafe {
+            win32_surface_loader.create_win32_surface_khr(
+                &win32_create_info,
+                None,
+            )?
+        };
+
+        self.surface = Some(surface);
+
+        Ok(self)
+    }
+
+    pub fn choose_surface_format(&mut self) -> Result<&mut Renderer, Box<Error>> {
+        let physical_device = self.physical_device.ok_or(RendererError::NoPhysicalDevice)?;
+        let surface = self.surface.ok_or(RendererError::NoSurface)?;
+        let surface_loader = self.surface_loader.ok_or(RendererError::NoSurfaceLoader)?;
+
+        let surface_format = surface_loader
+            .get_physical_device_surface_formats_khr(physical_device, surface.clone())?
+            .iter()
+            .map(|sfmt| match sfmt.format {
+                vk::Format::Undefined => {
+                    vk::SurfaceFormatKHR {
+                        format: vk::Format::B8g8r8Unorm,
+                        color_space: sfmt.color_space,
+                    }
                 }
-            }
-            _ => sfmt.clone(),
-        })
-        .nth(0)
-        .ok_or("Couldn't get physical device surface formats")?;
+                _ => sfmt.clone(),
+            })
+            .nth(0)
+            .ok_or("Couldn't get physical device surface formats")?;
 
-    Ok(surface_format)
+        self.surface_format = Some(surface_format);
+
+        Ok(self)
+    }
 }

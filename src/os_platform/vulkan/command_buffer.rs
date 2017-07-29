@@ -14,7 +14,7 @@ pub fn create_command_pool(
         s_type: vk::StructureType::CommandPoolCreateInfo,
         p_next: ptr::null(),
         flags: vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        queue_family_index: queue_family_index,
+        queue_family_index,
     };
 
     let command_pool = device.create_command_pool(&pool_create_info, None)?;
@@ -31,7 +31,7 @@ pub fn create_command_buffers(
         s_type: vk::StructureType::CommandBufferAllocateInfo,
         p_next: ptr::null(),
         command_buffer_count: buffer_count,
-        command_pool: command_pool,
+        command_pool,
         level: vk::CommandBufferLevel::Primary,
     };
 

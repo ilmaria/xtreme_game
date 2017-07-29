@@ -5,34 +5,36 @@ use std::ptr;
 use std::error::Error;
 use std::ffi::CStr;
 
-use super::InstanceV10;
-use super::EntryV10;
+use super::Renderer;
+use super::RendererError;
 
-pub fn set_debug_callback(
-    entry: &EntryV10,
-    instance: &InstanceV10,
-) -> Result<vk::DebugReportCallbackEXT, Box<Error>> {
-    let debug_info = vk::DebugReportCallbackCreateInfoEXT {
-        s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
-        p_next: ptr::null(),
-        flags: vk::DEBUG_REPORT_ERROR_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT |
-            vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
-        pfn_callback: vulkan_debug_callback,
-        p_user_data: ptr::null_mut(),
-    };
+impl Renderer {
+    pub fn set_debug_callback(&self) -> Result<&Renderer, Box<Error>> {
+        let entry = self.entry.ok_or(RendererError::NoEntry)?;
+        let instance = self.instance.ok_or(RendererError::NoInstance)?;
 
-    let debug_report_loader = DebugReport::new(entry, instance).map_err(
-        |_| "Couldn't create debug repoprt loader",
-    )?;
+        let debug_info = vk::DebugReportCallbackCreateInfoEXT {
+            s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
+            p_next: ptr::null(),
+            flags: vk::DEBUG_REPORT_ERROR_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT |
+                vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
+            pfn_callback: vulkan_debug_callback,
+            p_user_data: ptr::null_mut(),
+        };
 
-    let callback = unsafe {
-        debug_report_loader.create_debug_report_callback_ext(
-            &debug_info,
-            None,
-        )?
-    };
+        let debug_report_loader = DebugReport::new(&entry, &instance).map_err(
+            |_| "Couldn't create debug repoprt loader",
+        )?;
 
-    Ok(callback)
+        let callback = unsafe {
+            debug_report_loader.create_debug_report_callback_ext(
+                &debug_info,
+                None,
+            )?
+        };
+
+        Ok(self)
+    }
 }
 
 unsafe extern "system" fn vulkan_debug_callback(
