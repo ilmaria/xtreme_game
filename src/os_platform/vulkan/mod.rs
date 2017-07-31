@@ -25,20 +25,6 @@ use std::u64;
 use std::ptr;
 use std::fmt;
 
-// use self::instance::create_instance;
-// use self::debug_callback::set_debug_callback;
-// use self::surface::create_surface;
-// use self::physical_device::pick_physical_device;
-// use self::device::create_logical_device;
-// use self::swapchain::create_swapchain;
-// use self::image_views::{create_image_views, create_depth_view};
-// use self::render_pass::create_render_pass;
-// use self::graphics_pipeline::create_graphics_pipeline;
-// use self::framebuffers::create_framebuffers;
-// use self::command_buffer::create_command_buffers;
-// use self::command_buffer::create_command_pool;
-// use self::vertex_buffer::create_vertex_buffer;
-
 pub use super::graphics::Vertex;
 
 type RendererDevice = Device<V1_0>;
@@ -74,10 +60,11 @@ pub struct Renderer {
 
     pub render_pass: Option<vk::RenderPass>,
     pub graphics_pipeline: Option<vk::Pipeline>,
+    pub framebuffers: Option<Vec<vk::Framebuffer>>,
+    pub vertex_buffer: Option<vk::Buffer>,
 
     pub command_pool: Option<vk::CommandPool>,
-    pub draw_command_buffer: Option<vk::CommandBuffer>,
-    pub setup_command_buffer: Option<vk::CommandBuffer>,
+    pub command_buffers: Option<Vec<vk::CommandBuffer>>,
 
     pub depth_image: Option<vk::Image>,
     pub depth_image_view: Option<vk::ImageView>,
@@ -86,14 +73,6 @@ pub struct Renderer {
     pub image_available_semaphore: Option<vk::Semaphore>,
     pub rendering_complete_semaphore: Option<vk::Semaphore>,
 }
-
-// pub struct SurfaceDetails {
-//     khr: vk::SurfaceKHR,
-//     loader: Surface,
-//     format: vk::SurfaceFormatKHR,
-//     capabilities: vk::SurfaceCapabilitiesKHR,
-//     resolution: vk::Extent2D,
-// }
 
 impl Renderer {
     pub fn new(window: &winit::Window, width: u32, height: u32) -> Result<Renderer, Box<Error>> {
@@ -112,7 +91,10 @@ impl Renderer {
             .create_graphics_pipeline()?
             .create_framebuffers()?
             .create_command_pool()?
-            .create_command_buffers()
+            .create_vertex_buffer()?
+            .create_command_buffers()?
+            .create_semaphores()?
+            .build()
     }
 
     fn builder() -> Result<Renderer, Box<Error>> {
@@ -147,10 +129,11 @@ impl Renderer {
 
             render_pass: None,
             graphics_pipeline: None,
+            framebuffers: None,
+            vertex_buffer: None,
 
             command_pool: None,
-            draw_command_buffer: None,
-            setup_command_buffer: None,
+            command_buffers: None,
 
             depth_image: None,
             depth_image_view: None,
@@ -159,6 +142,10 @@ impl Renderer {
             image_available_semaphore: None,
             rendering_complete_semaphore: None,
         })
+    }
+
+    fn build(&mut self) -> Result<Renderer, Box<Error>> {
+        Ok(*self)
     }
 }
 
@@ -307,7 +294,7 @@ pub enum RendererError {
     NoDebugReport,
     NoDebugReportCallbackEXT,
     NoPhysicalDevice,
-    NoPhysicalDeviceMemoryProperties,
+    NoMemoryProperties,
     NoqueueFamilyIndex,
     NoQueue,
     NoSurfaceLoader,
@@ -321,11 +308,13 @@ pub enum RendererError {
     NoPresentImageViews,
     NoDepthImage,
     NoDepthImageView,
+    NoDepthImageMemory,
     NoRenderPass,
     NoGraphicsPipeline,
+    NoFramebuffers,
+    NoVertexBuffer,
     NoCommandPool,
-    NoCommandBuffer,
-    NoDeviceMemory,
+    NoCommandBuffers,
     NoSemaphore,
 }
 
@@ -341,9 +330,7 @@ impl fmt::Display for RendererError {
             NoDebugReport => write!(f, "{}", "No debug report specified"),
             NoDebugReportCallback => write!(f, "{}", "No debug report callback specified"),
             NoPhysicalDevice => write!(f, "{}", "No physical device specified"),
-            NoPhysicalDeviceMemoryProperties => {
-                write!(f, "{}", "No physical device memory properties specified")
-            }
+            NoMemoryProperties => write!(f, "{}", "No physical device memory properties specified"),
             NoqueueFamilyIndex => write!(f, "{}", "No queue family index specified"),
             NoQueue => write!(f, "{}", "No queue specified"),
             NoSurfaceLoader => write!(f, "{}", "No surface loader specified"),
@@ -357,11 +344,13 @@ impl fmt::Display for RendererError {
             NoPresentImageViews => write!(f, "{}", "No present image views specified"),
             NoDepthImage => write!(f, "{}", "No depth image specified"),
             NoDepthImageView => write!(f, "{}", "No depth image view specified"),
+            NoDepthImageMemory => write!(f, "{}", "No depth image memory specified"),
             NoRenderPass => write!(f, "{}", "No render pass specified"),
             NoGraphicsPipeline => write!(f, "{}", "No graphics pipeline specified"),
+            NoFramebuffers => write!(f, "{}", "No framebuffers specified"),
+            NoVertexBuffer => write!(f, "{}", "No vertex buffer specified"),
             NoCommandPool => write!(f, "{}", "No command pool specified"),
-            NoCommandBuffer => write!(f, "{}", "No command buffer specified"),
-            NoDeviceMemory => write!(f, "{}", "No device memory specified"),
+            NoCommandBuffers => write!(f, "{}", "No command buffers specified"),
             NoImageSemaphore => write!(f, "{}", "No image semaphore specified"),
             NoRenderingSemaphore => write!(f, "{}", "No rendering semaphore specified"),
         }
@@ -370,6 +359,6 @@ impl fmt::Display for RendererError {
 
 impl Error for RendererError {
     fn description(&self) -> &str {
-        format!("{}", self)
+        format!("{}", self).as_str()
     }
 }

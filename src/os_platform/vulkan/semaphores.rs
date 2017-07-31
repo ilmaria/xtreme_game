@@ -4,19 +4,25 @@ use ash::version::DeviceV1_0;
 use std::ptr;
 use std::error::Error;
 
-use super::DeviceV10;
+use super::Renderer;
+use super::RendererError;
 
-pub fn create_semaphores(device: &DeviceV10) -> Result<(vk::Semaphore, vk::Semaphore), Box<Error>> {
-    let semaphore_create_info = vk::SemaphoreCreateInfo {
-        s_type: vk::StructureType::SemaphoreCreateInfo,
-        p_next: ptr::null(),
-        flags: Default::default(),
-    };
+impl Renderer {
+    pub fn create_semaphores(&mut self) -> Result<&mut Renderer, Box<Error>> {
+        let device = self.device.ok_or(RendererError::NoDevice)?;
 
-    let image_available_semaphore = device
-        .create_semaphore(&semaphore_create_info, None)?;
-    let rendering_complete_semaphore = device
-        .create_semaphore(&semaphore_create_info, None)?;
+        let semaphore_create_info = vk::SemaphoreCreateInfo {
+            s_type: vk::StructureType::SemaphoreCreateInfo,
+            p_next: ptr::null(),
+            flags: Default::default(),
+        };
 
-    Ok((image_available_semaphore, rendering_complete_semaphore))
+        let image_available_semaphore = device.create_semaphore(&semaphore_create_info, None)?;
+        let rendering_complete_semaphore = device.create_semaphore(&semaphore_create_info, None)?;
+
+        self.image_available_semaphore = Some(image_available_semaphore);
+        self.rendering_complete_semaphore = Some(rendering_complete_semaphore);
+
+        Ok(self)
+    }
 }
