@@ -1,18 +1,21 @@
 use ash::vk;
+use ash::Entry;
+use ash::Instance;
+use ash::version::V1_0;
 use ash::extensions::DebugReport;
 
 use std::ptr;
 use std::error::Error;
 use std::ffi::CStr;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn set_debug_callback(&self) -> Result<&Renderer, Box<Error>> {
-        let entry = self.entry.ok_or(RendererError::NoEntry)?;
-        let instance = self.instance.ok_or(RendererError::NoInstance)?;
-
+impl VulkanRenderer {
+    pub fn set_debug_callback(
+        entry: &Entry<V1_0>,
+        instance: &Instance<V1_0>,
+    ) -> Result<(), Box<Error>> {
         let debug_info = vk::DebugReportCallbackCreateInfoEXT {
             s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
             p_next: ptr::null(),
@@ -22,7 +25,7 @@ impl Renderer {
             p_user_data: ptr::null_mut(),
         };
 
-        let debug_report_loader = DebugReport::new(&entry, &instance).map_err(
+        let debug_report_loader = DebugReport::new(entry, instance).map_err(
             |_| "Couldn't create debug repoprt loader",
         )?;
 
@@ -33,7 +36,7 @@ impl Renderer {
             )?
         };
 
-        Ok(self)
+        Ok(())
     }
 }
 

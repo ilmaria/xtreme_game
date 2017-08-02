@@ -5,6 +5,7 @@ use std::fs;
 use std::error::Error;
 
 use game::state::State;
+use super::super::renderer::Renderer;
 
 pub struct GameLib(Library);
 
@@ -15,12 +16,12 @@ impl GameLib {
         GameLib(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render(&self, state: &State) -> Result<String, Box<Error>> {
+    pub fn render(&self, state: &State, renderer: &Renderer) -> Result<(), Box<Error>> {
         unsafe {
             let func = self.0
-                .get::<fn(&State) -> Result<String, Box<Error>>>(b"render")
+                .get::<fn(&State, &Renderer) -> Result<(), Box<Error>>>(b"render")
                 .unwrap();
-            func(state)
+            func(state, renderer)
         }
     }
 

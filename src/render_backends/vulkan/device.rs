@@ -1,20 +1,21 @@
 use ash::vk;
-use ash::version::{InstanceV1_0, DeviceV1_0};
+use ash::Instance;
+use ash::Device;
+use ash::version::{InstanceV1_0, DeviceV1_0, V1_0};
 use ash::extensions::Swapchain;
 
 use std::ptr;
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn create_logical_device(&mut self) -> Result<&mut Renderer, Box<Error>> {
-        let instance = self.instance.ok_or(RendererError::NoInstance)?;
-        let queue_family_index = self.queue_family_index.ok_or(
-            RendererError::NoqueueFamilyIndex,
-        )?;
-        let physical_device = self.physical_device.ok_or(RendererError::NoPhysicalDevice)?;
+impl VulkanRenderer {
+    pub fn create_logical_device(
+        instance: &Instance<V1_0>,
+        queue_family_index: u32,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<Device<V1_0>, Box<Error>> {
 
         let features = vk::PhysicalDeviceFeatures {
             shader_clip_distance: 1,
@@ -57,11 +58,10 @@ impl Renderer {
             )?
         };
 
-        let present_queue = device.get_device_queue(queue_family_index, 0);
+        Ok(device)
+    }
 
-        self.device = Some(device);
-        self.present_queue = Some(present_queue);
-
-        Ok(self)
+    pub fn create_queue(device: &DeviceV1_0, queue_family_index: u32) -> vk::Queue {
+        unsafe { device.get_device_queue(queue_family_index, 0) }
     }
 }

@@ -6,11 +6,11 @@ use std::ptr;
 use std::error::Error;
 use std::ffi::CString;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn create_instance(&mut self) -> Result<&mut Renderer, Box<Error>> {
+impl VulkanRenderer {
+    pub fn create_instance(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         let entry = self.entry.ok_or(RendererError::NoEntry)?;
 
         let app_name = CString::new("Xtreme Game")?.as_ptr();

@@ -1,15 +1,15 @@
-mod instance;
-mod debug_callback;
-mod surface;
-mod physical_device;
-mod device;
-mod swapchain;
-mod image_views;
-mod framebuffers;
-mod render_pass;
-mod graphics_pipeline;
 mod command_buffer;
+mod debug_callback;
+mod device;
+mod framebuffers;
+mod graphics_pipeline;
+mod image_views;
+mod instance;
+mod physical_device;
+mod render_pass;
 mod semaphores;
+mod surface;
+mod swapchain;
 mod vertex_buffer;
 
 use ash::vk;
@@ -25,58 +25,63 @@ use std::u64;
 use std::ptr;
 use std::fmt;
 
-pub use super::graphics::Vertex;
+use super::Vertex;
+use super::Renderer;
 
 type RendererDevice = Device<V1_0>;
 type RendererInstance = Instance<V1_0>;
 type RendererEntry = Entry<V1_0>;
 
-pub struct Renderer {
-    pub entry: Option<RendererEntry>,
-    pub instance: Option<RendererInstance>,
-    pub device: Option<RendererDevice>,
+pub struct VulkanRenderer {
+    entry: Option<RendererEntry>,
+    instance: Option<RendererInstance>,
+    device: Option<RendererDevice>,
 
-    pub window: Option<winit::Window>,
-    pub window_width: Option<u64>,
-    pub window_height: Option<u64>,
+    window: Option<winit::Window>,
+    window_width: Option<u64>,
+    window_height: Option<u64>,
 
-    pub debug_report_loader: Option<DebugReport>,
-    pub debug_callback: Option<vk::DebugReportCallbackEXT>,
+    debug_report_loader: Option<DebugReport>,
+    debug_callback: Option<vk::DebugReportCallbackEXT>,
 
-    pub physical_device: Option<vk::PhysicalDevice>,
-    pub device_memory_properties: Option<vk::PhysicalDeviceMemoryProperties>,
-    pub queue_family_index: Option<u32>,
-    pub present_queue: Option<vk::Queue>,
+    physical_device: Option<vk::PhysicalDevice>,
+    device_memory_properties: Option<vk::PhysicalDeviceMemoryProperties>,
+    queue_family_index: Option<u32>,
+    present_queue: Option<vk::Queue>,
 
-    pub surface_loader: Option<Surface>,
-    pub surface: Option<vk::SurfaceKHR>,
-    pub surface_format: Option<vk::SurfaceFormatKHR>,
-    pub surface_resolution: Option<vk::Extent2D>,
+    surface_loader: Option<Surface>,
+    surface: Option<vk::SurfaceKHR>,
+    surface_format: Option<vk::SurfaceFormatKHR>,
+    surface_resolution: Option<vk::Extent2D>,
 
-    pub swapchain_loader: Option<Swapchain>,
-    pub swapchain: Option<vk::SwapchainKHR>,
-    pub present_images: Option<Vec<vk::Image>>,
-    pub present_image_views: Option<Vec<vk::ImageView>>,
+    swapchain_loader: Option<Swapchain>,
+    swapchain: Option<vk::SwapchainKHR>,
+    present_images: Option<Vec<vk::Image>>,
+    present_image_views: Option<Vec<vk::ImageView>>,
 
-    pub render_pass: Option<vk::RenderPass>,
-    pub graphics_pipeline: Option<vk::Pipeline>,
-    pub framebuffers: Option<Vec<vk::Framebuffer>>,
-    pub vertex_buffer: Option<vk::Buffer>,
+    render_pass: Option<vk::RenderPass>,
+    graphics_pipeline: Option<vk::Pipeline>,
+    framebuffers: Option<Vec<vk::Framebuffer>>,
+    vertex_buffer: Option<vk::Buffer>,
 
-    pub command_pool: Option<vk::CommandPool>,
-    pub command_buffers: Option<Vec<vk::CommandBuffer>>,
+    command_pool: Option<vk::CommandPool>,
+    command_buffers: Option<Vec<vk::CommandBuffer>>,
 
-    pub depth_image: Option<vk::Image>,
-    pub depth_image_view: Option<vk::ImageView>,
-    pub depth_image_memory: Option<vk::DeviceMemory>,
+    depth_image: Option<vk::Image>,
+    depth_image_view: Option<vk::ImageView>,
+    depth_image_memory: Option<vk::DeviceMemory>,
 
-    pub image_available_semaphore: Option<vk::Semaphore>,
-    pub rendering_complete_semaphore: Option<vk::Semaphore>,
+    image_available_semaphore: Option<vk::Semaphore>,
+    rendering_complete_semaphore: Option<vk::Semaphore>,
 }
 
-impl Renderer {
-    pub fn new(window: &winit::Window, width: u32, height: u32) -> Result<Renderer, Box<Error>> {
-        Renderer::builder()?
+impl VulkanRenderer {
+    pub fn new(
+        window: &winit::Window,
+        width: u32,
+        height: u32,
+    ) -> Result<VulkanRenderer, Box<Error>> {
+        VulkanRenderer::builder()?
             .create_instance()?
             .set_debug_callback()?
             .create_surface_loader()?
@@ -91,16 +96,16 @@ impl Renderer {
             .create_graphics_pipeline()?
             .create_framebuffers()?
             .create_command_pool()?
-            .create_vertex_buffer()?
+            //.create_vertex_buffer()?
             .create_command_buffers()?
             .create_semaphores()?
             .build()
     }
 
-    fn builder() -> Result<Renderer, Box<Error>> {
+    fn builder() -> Result<VulkanRenderer, Box<Error>> {
         let entry = Entry::new().map_err(|_| "Couldn't create new entry")?;
 
-        Ok(Renderer {
+        Ok(VulkanRenderer {
             entry: Some(entry),
             instance: None,
             device: None,
@@ -144,105 +149,77 @@ impl Renderer {
         })
     }
 
-    fn build(&mut self) -> Result<Renderer, Box<Error>> {
+    fn build(&mut self) -> Result<VulkanRenderer, Box<Error>> {
         Ok(*self)
     }
 }
 
+impl Renderer for VulkanRenderer {
+    fn draw_vertices(&self, vertices: Vec<Vertex>) {}
 
-// pub fn init_vulkan(window: &winit::Window, width: u32, height: u32) -> Result<(), Box<Error>> {
-// let entry = Entry::new().map_err(|_| "Couldn't create new entry")?;
-// let instance = create_instance(&entry)?;
-// set_debug_callback(&entry, &instance)?;
-// let surface = create_surface(&entry, &instance, window, width, height)?;
-// let (physical_device, queue_family_index) =
-//     pick_physical_device(&instance, &surface.khr, &surface.loader)?;
-// let device = create_logical_device(physical_device, &instance, queue_family_index)?;
-// let queue = unsafe { device.get_device_queue(queue_family_index, 0) };
-// let (swapchain, swapchain_loader) =
-//     create_swapchain(&device, &instance, physical_device, surface)?;
-// let present_image_views = create_image_views(&device, &surface, swapchain, swapchain_loader)?;
-// let depth_view = create_depth_view(&device, &instance, physical_device, &surface)?;
-// let render_pass = create_render_pass(&device, &surface)?;
-// let graphics_pipeline = create_graphics_pipeline(&device, &surface, render_pass);
-// let framebuffers = create_framebuffers(
-//     &device,
-//     present_image_views,
-//     depth_view,
-//     render_pass,
-//     &surface,
-// )?;
-// let command_pool = create_command_pool(&device, queue_family_index)?;
-// let command_buffers = create_command_buffers(&device, command_pool, framebuffers.len() as u32)?;
-//     Ok(())
-// }
+    fn display_frame(&self) -> Result<(), Box<Error>> {
+        let device = self.device.unwrap();
+        let present_queue = self.present_queue.unwrap();
+        let swapchain_loader = self.swapchain_loader.unwrap();
+        let swapchain = self.swapchain.unwrap();
+        let image_available_semaphore = self.image_available_semaphore.unwrap();
+        let rendering_complete_semaphore = self.rendering_complete_semaphore.unwrap();
+        let command_buffers = self.command_buffers.unwrap();
 
-// pub fn render() -> Result<(), Box<Error>> {
-//     device.queue_wait_idle(present_queue)?;
+        let image_index = unsafe {
+            device.queue_wait_idle(present_queue)?;
 
-//     let image_index = swapchain_loader.acquire_next_image_khr(
-//         swapchain,
-//         u64::MAX,
-//         image_available_semaphore,
-//         vk::Fence::null(),
-//     )?;
+            swapchain_loader.acquire_next_image_khr(
+                swapchain,
+                u64::MAX,
+                image_available_semaphore,
+                vk::Fence::null(),
+            )?
+        };
 
-//     let wait_semaphores = [image_available_semaphore];
-//     let signal_semaphores = [rendering_complete_semaphore];
-//     let wait_mask = [vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT];
+        let wait_semaphores = [image_available_semaphore];
+        let signal_semaphores = [rendering_complete_semaphore];
+        let wait_mask = [vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT];
 
-//     let submit_info = vk::SubmitInfo {
-//         s_type: vk::StructureType::SubmitInfo,
-//         p_next: ptr::null(),
-//         wait_semaphore_count: wait_semaphores.len() as u32,
-//         p_wait_semaphores: wait_semaphores.as_ptr(),
-//         p_wait_dst_stage_mask: wait_mask.as_ptr(),
-//         command_buffer_count: 1,
-//         p_command_buffers: &command_buffers[image_index],
-//         signal_semaphore_count: signal_semaphores.len() as u32,
-//         p_signal_semaphores: signal_semaphores.as_ptr(),
-//     };
+        let submit_info = vk::SubmitInfo {
+            s_type: vk::StructureType::SubmitInfo,
+            p_next: ptr::null(),
+            wait_semaphore_count: wait_semaphores.len() as u32,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            p_wait_dst_stage_mask: wait_mask.as_ptr(),
+            command_buffer_count: 1,
+            p_command_buffers: &command_buffers[image_index as usize],
+            signal_semaphore_count: signal_semaphores.len() as u32,
+            p_signal_semaphores: signal_semaphores.as_ptr(),
+        };
 
-//     device.queue_submit(
-//         present_queue,
-//         &[submit_info],
-//         ptr::null(),
-//     )?;
+        unsafe {
+            device.queue_submit(
+                present_queue,
+                &[submit_info],
+                vk::Fence::null(),
+            )?;
 
-//     let present_info = vk::PresentInfoKHR {
-//         s_type: vk::StructureType::PresentInfoKhr,
-//         p_next: ptr::null(),
-//         wait_semaphore_count: 1,
-//         p_wait_semaphores: &rendering_complete_semaphore,
-//         swapchain_count: 1,
-//         p_swapchains: &swapchain,
-//         p_image_indices: &image_index,
-//         p_results: ptr::null_mut(),
-//     };
-//     swapchain_loader.queue_present_khr(present_queue, &present_info);
+            let present_info = vk::PresentInfoKHR {
+                s_type: vk::StructureType::PresentInfoKhr,
+                p_next: ptr::null(),
+                wait_semaphore_count: 1,
+                p_wait_semaphores: &rendering_complete_semaphore,
+                swapchain_count: 1,
+                p_swapchains: &swapchain,
+                p_image_indices: &image_index,
+                p_results: ptr::null_mut(),
+            };
+            swapchain_loader.queue_present_khr(present_queue, &present_info);
+        }
 
-//     Ok(())
-// }
+        Ok(())
+    }
 
-// pub fn recreate_swapchain() -> Result<(), Box<Error>> {
-//     let (swapchain, swapchain_loader) =
-//         create_swapchain(&device, &instance, physical_device, surface)?;
-//     let present_image_views = create_image_views(&device, &surface, swapchain, swapchain_loader)?;
-//     let depth_view = create_depth_view(&device, &instance, physical_device, &surface)?;
-//     let render_pass = create_render_pass(&device, &surface)?;
-//     let graphics_pipeline = create_pipeline(&device, &surface, render_pass);
-//     let framebuffers = create_framebuffers(
-//         &device,
-//         present_image_views,
-//         depth_view,
-//         render_pass,
-//         &surface,
-//     )?;
-//     let command_pool = create_command_pool(&device, queue_family_index)?;
-//     let command_buffers = create_command_buffers(&device, command_pool, framebuffers.len() as u32)?;
+    fn update_resolution(&self, width: u64, height: u64) {}
 
-//     Ok(())
-// }
+    fn change_settings(&self) {}
+}
 
 pub fn find_memorytype_index(
     memory_req: &vk::MemoryRequirements,
@@ -296,7 +273,7 @@ pub enum RendererError {
     NoPhysicalDevice,
     NoMemoryProperties,
     NoqueueFamilyIndex,
-    NoQueue,
+    NoPresentQueue,
     NoSurfaceLoader,
     NoSurface,
     NoSurfaceFormat,
@@ -332,7 +309,7 @@ impl fmt::Display for RendererError {
             NoPhysicalDevice => write!(f, "{}", "No physical device specified"),
             NoMemoryProperties => write!(f, "{}", "No physical device memory properties specified"),
             NoqueueFamilyIndex => write!(f, "{}", "No queue family index specified"),
-            NoQueue => write!(f, "{}", "No queue specified"),
+            NoPresentQueue => write!(f, "{}", "No present queue specified"),
             NoSurfaceLoader => write!(f, "{}", "No surface loader specified"),
             NoSurface => write!(f, "{}", "No surface specified"),
             NoSurfaceFormat => write!(f, "{}", "No surface format specified"),

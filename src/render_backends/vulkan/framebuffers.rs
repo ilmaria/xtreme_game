@@ -4,21 +4,17 @@ use ash::version::DeviceV1_0;
 use std::ptr;
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn create_framebuffers(&mut self) -> Result<&mut Renderer, Box<Error>> {
-        let device = self.device.ok_or(RendererError::NoDevice)?;
-        let render_pass = self.render_pass.ok_or(RendererError::NoRenderPass)?;
-        let surface_resolution = self.surface_resolution.ok_or(
-            RendererError::NoSurfaceResolution,
-        )?;
-        let present_image_views = self.present_image_views.ok_or(
-            RendererError::NoPresentImageViews,
-        )?;
-        let depth_image_view = self.depth_image_view.ok_or(RendererError::NoDepthImageView)?;
-
+impl VulkanRenderer {
+    pub fn create_framebuffers(
+        device: &DeviceV1_0,
+        render_pass: vk::RenderPass,
+        surface_resolution: vk::Extent2D,
+        present_image_views: Vec<vk::ImageView>,
+        depth_image_view: vk::ImageView,
+    ) -> Result<Vec<vk::Framebuffer>, Box<Error>> {
         let framebuffers = present_image_views
             .iter()
             .map(|&present_image_view| {
@@ -34,12 +30,14 @@ impl Renderer {
                     height: surface_resolution.height,
                     layers: 1,
                 };
-                device.create_framebuffer(&frame_buffer_create_info, None)
+                unsafe {
+                    device
+                        .create_framebuffer(&frame_buffer_create_info, None)
+                        .unwrap()
+                }
             })
-            .collect()?;
+            .collect();
 
-        self.framebuffers = Some(framebuffers);
-
-        Ok(self)
+        Ok(framebuffers)
     }
 }

@@ -4,11 +4,11 @@ use ash::version::DeviceV1_0;
 use std::ptr;
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn create_render_pass(&mut self) -> Result<&mut Renderer, Box<Error>> {
+impl VulkanRenderer {
+    pub fn create_render_pass(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         let surface_format = self.surface_format.ok_or(RendererError::NoSurfaceFormat)?;
         let device = self.device.ok_or(RendererError::NoDevice)?;
 
@@ -84,7 +84,7 @@ impl Renderer {
             p_dependencies: &dependency,
         };
 
-        let render_pass = device.create_render_pass(&renderpass_create_info, None)?;
+        let render_pass = unsafe { device.create_render_pass(&renderpass_create_info, None)? };
 
         self.render_pass = Some(render_pass);
 

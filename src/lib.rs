@@ -4,6 +4,7 @@ extern crate cgmath;
 extern crate glsl_to_spirv;
 
 pub mod game;
+pub mod renderer;
 
 use std::error::Error;
 

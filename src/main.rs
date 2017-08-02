@@ -7,6 +7,8 @@ extern crate glsl_to_spirv;
 
 pub mod os_platform;
 pub mod game;
+pub mod renderer;
+pub mod render_backends;
 
 use ash::vk;
 use winit::{KeyboardInput, VirtualKeyCode, Event, WindowEvent};
@@ -17,6 +19,7 @@ use std::time;
 
 use game::state::State;
 use os_platform::code_reload::GameLib;
+use render_backends::vulkan::VulkanRenderer;
 
 #[cfg(target_os = "windows")]
 const LIB_PATH: &str = "./target/debug/xtreme_game.dll";
@@ -34,7 +37,7 @@ pub fn main() {
         .build(&events_loop)
         .unwrap();
 
-    os_platform::init_vulkan(&window, 1024, 768);
+    let mut renderer = VulkanRenderer::new(&window, 1024, 768).unwrap();
 
     let mut game = GameLib::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
@@ -80,19 +83,8 @@ pub fn main() {
         let alpha = time_accumulator.subsec_nanos() as f64 / state.delta_time.subsec_nanos() as f64;
         game.interpolate(&state, &mut next_state, alpha);
 
-        // previous_frame.cleanup_finished();
+        game.render(&state, &renderer).unwrap();
 
-        // let future = game.render(RenderParams {
-        //     device.clone(),
-        //     queue.clone(),
-        //     swapchain.clone(),
-        //     render_pass.clone(),
-        //     pipeline.clone(),
-        //     &framebuffers,
-        //     &vertex_buffer,
-        //     previous_frame,
-        // }, &next_state).unwrap();
-
-        // previous_frame = Box::new(future) as Box<_>;
+        //renderer.draw_frame();
     }
 }

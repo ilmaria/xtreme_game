@@ -4,11 +4,11 @@ use ash::extensions::Surface;
 
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn pick_physical_device(&mut self) -> Result<&mut Renderer, Box<Error>> {
+impl VulkanRenderer {
+    pub fn pick_physical_device(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         let instance = self.instance.ok_or(RendererError::NoInstance)?;
         let surface = self.surface.ok_or(RendererError::NoSurface)?;
         let surface_loader = self.surface_loader.ok_or(RendererError::NoSurfaceLoader)?;

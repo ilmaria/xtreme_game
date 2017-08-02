@@ -1,23 +1,22 @@
 use ash::vk;
-use ash::version::{DeviceV1_0, InstanceV1_0};
+use ash::Instance;
+use ash::version::{DeviceV1_0, InstanceV1_0, V1_0};
 use ash::extensions::Swapchain;
 
 use std::ptr;
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 use super::find_memorytype_index;
 
-impl Renderer {
-    pub fn create_image_views(&mut self) -> Result<&mut Renderer, Box<Error>> {
-        let surface_format = self.surface_format.ok_or(RendererError::NoSurfaceFormat)?;
-        let device = self.device.ok_or(RendererError::NoDevice)?;
-        let swapchain = self.swapchain.ok_or(RendererError::NoSwapchain)?;
-        let swapchain_loader = self.swapchain_loader.ok_or(
-            RendererError::NoSwapchainLoader,
-        )?;
-
+impl VulkanRenderer {
+    pub fn create_image_views(
+        device: &DeviceV1_0,
+        swapchain: vk::SwapchainKHR,
+        swapchain_loader: Swapchain,
+        surface_format: vk::SurfaceFormatKHR,
+    ) -> Result<Vec<vk::ImageView>, Box<Error>> {
         let image_views = swapchain_loader
             .get_swapchain_images_khr(swapchain)?
             .iter()
@@ -43,23 +42,19 @@ impl Renderer {
                     },
                     image: image,
                 };
-                device.create_image_view(&create_view_info, None)
+                unsafe { device.create_image_view(&create_view_info, None).unwrap() }
             })
-            .collect()?;
+            .collect();
 
-        self.present_image_views = Some(image_views);
-
-        Ok(self)
+        Ok(image_views)
     }
 
-    pub fn create_depth_view(&mut self) -> Result<&mut Renderer, Box<Error>> {
-        let surface_resolution = self.surface_resolution.ok_or(
-            RendererError::NoSurfaceResolution,
-        )?;
-        let instance = self.instance.ok_or(RendererError::NoInstance)?;
-        let device = self.device.ok_or(RendererError::NoDevice)?;
-        let physical_device = self.physical_device.ok_or(RendererError::NoPhysicalDevice)?;
-
+    pub fn create_depth_image(
+        device: &DeviceV1_0,
+        instance: &Instance<V1_0>,
+        surface_resolution: vk::Extent2D,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<vk::Image, Box<Error>> {
         let depth_image_create_info = vk::ImageCreateInfo {
             s_type: vk::StructureType::ImageCreateInfo,
             p_next: ptr::null(),
@@ -81,7 +76,7 @@ impl Renderer {
             p_queue_family_indices: ptr::null(),
             initial_layout: vk::ImageLayout::Undefined,
         };
-        let depth_image = device.create_image(&depth_image_create_info, None)?;
+        let depth_image = unsafe { device.create_image(&depth_image_create_info, None)? };
 
         let device_memory_properties =
             instance.get_physical_device_memory_properties(physical_device);
@@ -98,15 +93,25 @@ impl Renderer {
             allocation_size: depth_image_memory_req.size,
             memory_type_index: depth_image_memory_index,
         };
-        let depth_image_memory = device.allocate_memory(&depth_image_allocate_info, None)?;
-        device.bind_image_memory(depth_image, depth_image_memory, 0)?;
 
+        unsafe {
+            let depth_image_memory = device.allocate_memory(&depth_image_allocate_info, None)?;
+            device.bind_image_memory(depth_image, depth_image_memory, 0)?;
+        };
+
+        Ok(depth_image)
+    }
+
+    pub fn create_depth_image_view(
+        device: &DeviceV1_0,
+        depth_image: vk::Image,
+    ) -> Result<vk::ImageView, Box<Error>> {
         let depth_image_view_info = vk::ImageViewCreateInfo {
             s_type: vk::StructureType::ImageViewCreateInfo,
             p_next: ptr::null(),
             flags: Default::default(),
             view_type: vk::ImageViewType::Type2d,
-            format: depth_image_create_info.format,
+            format: vk::Format::D16Unorm,
             components: vk::ComponentMapping {
                 r: vk::ComponentSwizzle::Identity,
                 g: vk::ComponentSwizzle::Identity,
@@ -123,11 +128,8 @@ impl Renderer {
             image: depth_image,
         };
 
-        let depth_image_view = device.create_image_view(&depth_image_view_info, None)?;
+        let depth_image_view = unsafe { device.create_image_view(&depth_image_view_info, None)? };
 
-        self.depth_image_view = Some(depth_image_view);
-        self.depth_image = Some(depth_image);
-
-        Ok(self)
+        Ok(depth_image_view)
     }
 }

@@ -6,11 +6,11 @@ use std::ptr;
 use std::u32;
 use std::error::Error;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 
-impl Renderer {
-    pub fn create_surface_loader(&mut self) -> Result<&mut Renderer, Box<Error>> {
+impl VulkanRenderer {
+    pub fn create_surface_loader(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         let entry = self.entry.ok_or(RendererError::NoEntry)?;
         let instance = self.instance.ok_or(RendererError::NoInstance)?;
 
@@ -24,7 +24,7 @@ impl Renderer {
     }
 
     #[cfg(all(unix, not(target_os = "android")))]
-    pub fn create_surface(&mut self) -> Result<&mut Renderer, Box<Error>> {
+    pub fn create_surface(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         use winit::os::unix::WindowExt;
 
         let entry = self.entry.ok_or(RendererError::NoEntry)?;
@@ -59,11 +59,11 @@ impl Renderer {
     }
 
     #[cfg(windows)]
-    pub fn create_surface(&mut self) -> Result<&mut Renderer, Box<Error>> {
+    pub fn create_surface(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         use winit::os::windows::WindowExt;
 
         let entry = self.entry.ok_or(RendererError::NoEntry)?;
-        let instance = self.instance.ok_or(RendererError::NoInstance)?;
+        let instance = self.instance.as_ref().ok_or(RendererError::NoInstance)?;
         let window = self.window.ok_or(RendererError::NoWindow)?;
 
         let hwnd = window.get_hwnd().ok_or("Couldn't get window hwnd")?;
@@ -92,7 +92,7 @@ impl Renderer {
         Ok(self)
     }
 
-    pub fn choose_surface_format(&mut self) -> Result<&mut Renderer, Box<Error>> {
+    pub fn choose_surface_format(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         let physical_device = self.physical_device.ok_or(RendererError::NoPhysicalDevice)?;
         let surface = self.surface.ok_or(RendererError::NoSurface)?;
         let surface_loader = self.surface_loader.ok_or(RendererError::NoSurfaceLoader)?;

@@ -8,26 +8,27 @@ use std::ffi::CString;
 use std::fs::File;
 use std::io::prelude::*;
 
-use super::Renderer;
+use super::VulkanRenderer;
 use super::RendererError;
 use super::Vertex;
 
-impl Renderer {
-    pub fn create_graphics_pipeline(&mut self) -> Result<&mut Renderer, Box<Error>> {
-        let device = self.device.ok_or(RendererError::NoDevice)?;
-        let render_pass = self.render_pass.ok_or(RendererError::NoRenderPass)?;
-        let surface_resolution = self.surface_resolution.ok_or(
-            RendererError::NoSurfaceResolution,
-        )?;
-
+impl VulkanRenderer {
+    pub fn create_graphics_pipeline(
+        device: &DeviceV1_0,
+        render_pass: vk::RenderPass,
+        surface_resolution: vk::Extent2D,
+        depth_image_view: vk::ImageView,
+    ) -> Result<vk::Pipeline, Box<Error>> {
         let entry_name = CString::new("main")?;
 
         let vert_shader_stage_info = {
-            let vert_shader = create_shader_module(
-                &device,
-                "data/shaders/cube.vert",
-                glsl_to_spirv::ShaderType::Vertex,
-            )?;
+            let vert_shader = unsafe {
+                create_shader_module(
+                    device,
+                    "data/shaders/cube.vert",
+                    glsl_to_spirv::ShaderType::Vertex,
+                )?
+            };
 
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
@@ -41,11 +42,13 @@ impl Renderer {
         };
 
         let frag_shader_stage_info = {
-            let frag_shader = create_shader_module(
-                &device,
-                "data/shaders/cube.frag",
-                glsl_to_spirv::ShaderType::Fragment,
-            )?;
+            let frag_shader = unsafe {
+                create_shader_module(
+                    device,
+                    "data/shaders/cube.frag",
+                    glsl_to_spirv::ShaderType::Fragment,
+                )?
+            };
 
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
@@ -202,7 +205,7 @@ impl Renderer {
                 p_push_constant_ranges: ptr::null(),
             };
 
-            device.create_pipeline_layout(&layout_create_info, None)?
+            unsafe { device.create_pipeline_layout(&layout_create_info, None)? }
         };
 
         let graphics_pipelines = {
@@ -228,22 +231,22 @@ impl Renderer {
                 base_pipeline_index: 0,
             };
 
-            device
-                .create_graphics_pipelines(
-                    vk::PipelineCache::null(),
-                    &[graphics_pipeline_create_info],
-                    None,
-                )
-                .map_err(|err| "Unable to create graphics pipeline")?
+            unsafe {
+                device
+                    .create_graphics_pipelines(
+                        vk::PipelineCache::null(),
+                        &[graphics_pipeline_create_info],
+                        None,
+                    )
+                    .map_err(|err| "Unable to create graphics pipeline")?
+            }
         };
 
-        self.graphics_pipeline = Some(graphics_pipelines[0]);
-
-        Ok(self)
+        Ok(graphics_pipelines[0])
     }
 }
 
-fn create_shader_module(
+unsafe fn create_shader_module(
     device: &DeviceV1_0,
     path: &str,
     shader_type: glsl_to_spirv::ShaderType,
