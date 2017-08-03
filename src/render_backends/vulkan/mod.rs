@@ -1,4 +1,5 @@
 mod command_buffer;
+mod command_pool;
 mod debug_callback;
 mod device;
 mod framebuffers;
@@ -7,7 +8,7 @@ mod image_views;
 mod instance;
 mod physical_device;
 mod render_pass;
-mod semaphores;
+mod semaphore;
 mod surface;
 mod swapchain;
 mod vertex_buffer;
@@ -28,51 +29,33 @@ use std::fmt;
 use super::Vertex;
 use super::Renderer;
 
-type RendererDevice = Device<V1_0>;
-type RendererInstance = Instance<V1_0>;
-type RendererEntry = Entry<V1_0>;
-
 pub struct VulkanRenderer {
-    entry: Option<RendererEntry>,
-    instance: Option<RendererInstance>,
-    device: Option<RendererDevice>,
+    entry: Entry<V1_0>,
+    instance: Instance<V1_0>,
+    device: Device<V1_0>,
 
-    window: Option<winit::Window>,
-    window_width: Option<u64>,
-    window_height: Option<u64>,
+    physical_device: vk::PhysicalDevice,
+    queue_family_index: u32,
+    present_queue: vk::Queue,
 
-    debug_report_loader: Option<DebugReport>,
-    debug_callback: Option<vk::DebugReportCallbackEXT>,
+    surface_loader: Surface,
+    surface: vk::SurfaceKHR,
+    surface_format: vk::SurfaceFormatKHR,
+    surface_resolution: vk::Extent2D,
 
-    physical_device: Option<vk::PhysicalDevice>,
-    device_memory_properties: Option<vk::PhysicalDeviceMemoryProperties>,
-    queue_family_index: Option<u32>,
-    present_queue: Option<vk::Queue>,
+    swapchain_loader: Swapchain,
+    swapchain: vk::SwapchainKHR,
+    present_image_views: Vec<vk::ImageView>,
 
-    surface_loader: Option<Surface>,
-    surface: Option<vk::SurfaceKHR>,
-    surface_format: Option<vk::SurfaceFormatKHR>,
-    surface_resolution: Option<vk::Extent2D>,
+    command_pool: vk::CommandPool,
+    command_buffers: Vec<vk::CommandBuffer>,
 
-    swapchain_loader: Option<Swapchain>,
-    swapchain: Option<vk::SwapchainKHR>,
-    present_images: Option<Vec<vk::Image>>,
-    present_image_views: Option<Vec<vk::ImageView>>,
+    depth_image: vk::Image,
+    depth_image_view: vk::ImageView,
+    depth_image_memory: vk::DeviceMemory,
 
-    render_pass: Option<vk::RenderPass>,
-    graphics_pipeline: Option<vk::Pipeline>,
-    framebuffers: Option<Vec<vk::Framebuffer>>,
-    vertex_buffer: Option<vk::Buffer>,
-
-    command_pool: Option<vk::CommandPool>,
-    command_buffers: Option<Vec<vk::CommandBuffer>>,
-
-    depth_image: Option<vk::Image>,
-    depth_image_view: Option<vk::ImageView>,
-    depth_image_memory: Option<vk::DeviceMemory>,
-
-    image_available_semaphore: Option<vk::Semaphore>,
-    rendering_complete_semaphore: Option<vk::Semaphore>,
+    image_available_semaphore: vk::Semaphore,
+    rendering_complete_semaphore: vk::Semaphore,
 }
 
 impl VulkanRenderer {
@@ -81,76 +64,116 @@ impl VulkanRenderer {
         width: u32,
         height: u32,
     ) -> Result<VulkanRenderer, Box<Error>> {
-        VulkanRenderer::builder()?
-            .create_instance()?
-            .set_debug_callback()?
-            .create_surface_loader()?
-            .create_surface()?
-            .pick_physical_device()?
-            .choose_surface_format()?
-            .create_logical_device()?
-            .create_swapchain()?
-            .create_image_views()?
-            .create_depth_view()?
-            .create_render_pass()?
-            .create_graphics_pipeline()?
-            .create_framebuffers()?
-            .create_command_pool()?
-            //.create_vertex_buffer()?
-            .create_command_buffers()?
-            .create_semaphores()?
-            .build()
-    }
+        // VulkanRenderer::builder()?
+        //     .create_instance()?
+        //     .set_debug_callback()?
+        //     .create_surface_loader()?
+        //     .create_surface()?
+        //     .pick_physical_device()?
+        //     .choose_surface_format()?
+        //     .create_logical_device()?
+        //     .create_swapchain()?
+        //     .create_image_views()?
+        //     .create_depth_view()?
+        //     .create_render_pass()?
+        //     .create_graphics_pipeline()?
+        //     .create_framebuffers()?
+        //     .create_command_pool()?
+        //     //.create_vertex_buffer()?
+        //     .create_command_buffers()?
+        //     .create_semaphores()?
+        //     .build()
 
-    fn builder() -> Result<VulkanRenderer, Box<Error>> {
         let entry = Entry::new().map_err(|_| "Couldn't create new entry")?;
 
+        let instance = instance::new(&entry)?;
+
+        debug_callback::new(&entry, &instance)?;
+
+        let surface_loader = surface::new_loader(&entry, &instance)?;
+
+        let surface = surface::new(&entry, &instance, window)?;
+
+        let (physical_device, queue_family_index) =
+            physical_device::new_with_queue(&instance, surface, &surface_loader)?;
+
+        let surface_format = surface::new_format(physical_device, surface, &surface_loader)?;
+        let surface_resolution =
+            surface::new_resolution(physical_device, surface, &surface_loader, width, height)?;
+
+        let device = device::new(&instance, queue_family_index, physical_device)?;
+
+        let present_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
+
+        let swapchain_loader = swapchain::new_loader(&device, &instance)?;
+
+        let swapchain = swapchain::new(
+            &device,
+            &instance,
+            physical_device,
+            surface,
+            &surface_loader,
+            &surface_format,
+            &surface_resolution,
+            &swapchain_loader,
+        )?;
+
+        let (depth_image, depth_image_memory) =
+            image_views::new_depth_image(&device, &instance, &surface_resolution, physical_device)?;
+        let depth_image_view = image_views::new_depth_view(&device, depth_image)?;
+
+        let present_image_views =
+            image_views::new(&device, swapchain, &swapchain_loader, &surface_format)?;
+
+        let render_pass = render_pass::new(&device, &surface_format)?;
+
+        let graphics_pipeline =
+            graphics_pipeline::new(&device, render_pass, &surface_resolution, depth_image_view)?;
+
+        let framebuffers = framebuffers::new(
+            &device,
+            render_pass,
+            &surface_resolution,
+            &present_image_views,
+            depth_image_view,
+        )?;
+
+        let command_pool = command_pool::new(&device, &instance, queue_family_index)?;
+
+        let command_buffers =
+            command_buffer::new(&device, command_pool, framebuffers.len() as u32)?;
+
+        let image_available_semaphore = semaphore::new(&device)?;
+        let rendering_complete_semaphore = semaphore::new(&device)?;
+
         Ok(VulkanRenderer {
-            entry: Some(entry),
-            instance: None,
-            device: None,
+            entry,
+            instance,
+            device,
 
-            window: None,
-            window_width: None,
-            window_height: None,
+            physical_device,
+            queue_family_index,
+            present_queue,
 
-            debug_report_loader: None,
-            debug_callback: None,
+            surface_loader,
+            surface,
+            surface_format,
+            surface_resolution,
 
-            physical_device: None,
-            device_memory_properties: None,
-            queue_family_index: None,
-            present_queue: None,
+            swapchain_loader,
+            swapchain,
+            present_image_views,
 
-            surface_loader: None,
-            surface: None,
-            surface_format: None,
-            surface_resolution: None,
+            command_pool,
+            command_buffers,
 
-            swapchain_loader: None,
-            swapchain: None,
-            present_images: None,
-            present_image_views: None,
+            depth_image,
+            depth_image_view,
+            depth_image_memory,
 
-            render_pass: None,
-            graphics_pipeline: None,
-            framebuffers: None,
-            vertex_buffer: None,
-
-            command_pool: None,
-            command_buffers: None,
-
-            depth_image: None,
-            depth_image_view: None,
-            depth_image_memory: None,
-
-            image_available_semaphore: None,
-            rendering_complete_semaphore: None,
+            image_available_semaphore,
+            rendering_complete_semaphore,
         })
-    }
-
-    fn build(&mut self) -> Result<VulkanRenderer, Box<Error>> {
-        Ok(*self)
     }
 }
 
@@ -158,27 +181,19 @@ impl Renderer for VulkanRenderer {
     fn draw_vertices(&self, vertices: Vec<Vertex>) {}
 
     fn display_frame(&self) -> Result<(), Box<Error>> {
-        let device = self.device.unwrap();
-        let present_queue = self.present_queue.unwrap();
-        let swapchain_loader = self.swapchain_loader.unwrap();
-        let swapchain = self.swapchain.unwrap();
-        let image_available_semaphore = self.image_available_semaphore.unwrap();
-        let rendering_complete_semaphore = self.rendering_complete_semaphore.unwrap();
-        let command_buffers = self.command_buffers.unwrap();
-
         let image_index = unsafe {
-            device.queue_wait_idle(present_queue)?;
+            self.device.queue_wait_idle(self.present_queue)?;
 
-            swapchain_loader.acquire_next_image_khr(
-                swapchain,
+            self.swapchain_loader.acquire_next_image_khr(
+                self.swapchain,
                 u64::MAX,
-                image_available_semaphore,
+                self.image_available_semaphore,
                 vk::Fence::null(),
             )?
         };
 
-        let wait_semaphores = [image_available_semaphore];
-        let signal_semaphores = [rendering_complete_semaphore];
+        let wait_semaphores = [self.image_available_semaphore];
+        let signal_semaphores = [self.rendering_complete_semaphore];
         let wait_mask = [vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT];
 
         let submit_info = vk::SubmitInfo {
@@ -188,14 +203,14 @@ impl Renderer for VulkanRenderer {
             p_wait_semaphores: wait_semaphores.as_ptr(),
             p_wait_dst_stage_mask: wait_mask.as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: &command_buffers[image_index as usize],
+            p_command_buffers: &self.command_buffers[image_index as usize],
             signal_semaphore_count: signal_semaphores.len() as u32,
             p_signal_semaphores: signal_semaphores.as_ptr(),
         };
 
         unsafe {
-            device.queue_submit(
-                present_queue,
+            self.device.queue_submit(
+                self.present_queue,
                 &[submit_info],
                 vk::Fence::null(),
             )?;
@@ -204,13 +219,16 @@ impl Renderer for VulkanRenderer {
                 s_type: vk::StructureType::PresentInfoKhr,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &rendering_complete_semaphore,
+                p_wait_semaphores: &self.rendering_complete_semaphore,
                 swapchain_count: 1,
-                p_swapchains: &swapchain,
+                p_swapchains: &self.swapchain,
                 p_image_indices: &image_index,
                 p_results: ptr::null_mut(),
             };
-            swapchain_loader.queue_present_khr(present_queue, &present_info);
+            self.swapchain_loader.queue_present_khr(
+                self.present_queue,
+                &present_info,
+            )?;
         }
 
         Ok(())
@@ -258,84 +276,4 @@ fn find_memorytype_index_f<F: Fn(vk::MemoryPropertyFlags, vk::MemoryPropertyFlag
     Err(
         "Unable to find suitable memory index for depth image.".to_owned(),
     )
-}
-
-#[derive(Debug)]
-pub enum RendererError {
-    NoEntry,
-    NoInstance,
-    NoDevice,
-    NoWindow,
-    NoWidth,
-    NoHeight,
-    NoDebugReport,
-    NoDebugReportCallbackEXT,
-    NoPhysicalDevice,
-    NoMemoryProperties,
-    NoqueueFamilyIndex,
-    NoPresentQueue,
-    NoSurfaceLoader,
-    NoSurface,
-    NoSurfaceFormat,
-    NoSurfaceResolution,
-    NoExtent2D,
-    NoSwapchainLoader,
-    NoSwapchain,
-    NoPresentImages,
-    NoPresentImageViews,
-    NoDepthImage,
-    NoDepthImageView,
-    NoDepthImageMemory,
-    NoRenderPass,
-    NoGraphicsPipeline,
-    NoFramebuffers,
-    NoVertexBuffer,
-    NoCommandPool,
-    NoCommandBuffers,
-    NoSemaphore,
-}
-
-impl fmt::Display for RendererError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NoEntry => write!(f, "{}", "No entry specified"),
-            NoInstance => write!(f, "{}", "No instance specified"),
-            NoDevice => write!(f, "{}", "No device specified"),
-            NoWindow => write!(f, "{}", "No window specified"),
-            NoWidth => write!(f, "{}", "No width specified"),
-            NoHeight => write!(f, "{}", "No height specified"),
-            NoDebugReport => write!(f, "{}", "No debug report specified"),
-            NoDebugReportCallback => write!(f, "{}", "No debug report callback specified"),
-            NoPhysicalDevice => write!(f, "{}", "No physical device specified"),
-            NoMemoryProperties => write!(f, "{}", "No physical device memory properties specified"),
-            NoqueueFamilyIndex => write!(f, "{}", "No queue family index specified"),
-            NoPresentQueue => write!(f, "{}", "No present queue specified"),
-            NoSurfaceLoader => write!(f, "{}", "No surface loader specified"),
-            NoSurface => write!(f, "{}", "No surface specified"),
-            NoSurfaceFormat => write!(f, "{}", "No surface format specified"),
-            NoSurfaceResolution => write!(f, "{}", "No surface resolution specified"),
-            NoExtent2D => write!(f, "{}", "No 2D extent specified"),
-            NoSwapchainLoader => write!(f, "{}", "No swapchain loader specified"),
-            NoSwapchain => write!(f, "{}", "No swapchain specified"),
-            NoPresentImages => write!(f, "{}", "No present images specified"),
-            NoPresentImageViews => write!(f, "{}", "No present image views specified"),
-            NoDepthImage => write!(f, "{}", "No depth image specified"),
-            NoDepthImageView => write!(f, "{}", "No depth image view specified"),
-            NoDepthImageMemory => write!(f, "{}", "No depth image memory specified"),
-            NoRenderPass => write!(f, "{}", "No render pass specified"),
-            NoGraphicsPipeline => write!(f, "{}", "No graphics pipeline specified"),
-            NoFramebuffers => write!(f, "{}", "No framebuffers specified"),
-            NoVertexBuffer => write!(f, "{}", "No vertex buffer specified"),
-            NoCommandPool => write!(f, "{}", "No command pool specified"),
-            NoCommandBuffers => write!(f, "{}", "No command buffers specified"),
-            NoImageSemaphore => write!(f, "{}", "No image semaphore specified"),
-            NoRenderingSemaphore => write!(f, "{}", "No rendering semaphore specified"),
-        }
-    }
-}
-
-impl Error for RendererError {
-    fn description(&self) -> &str {
-        format!("{}", self).as_str()
-    }
 }

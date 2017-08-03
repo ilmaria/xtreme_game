@@ -1,26 +1,37 @@
 use ash::vk;
-use ash::extensions::Swapchain;
+use ash::Instance;
+use ash::Device;
+use ash::version::{V1_0, DeviceV1_0};
+use ash::extensions::{Swapchain, Surface};
 
 use std::ptr;
 use std::error::Error;
+use std::u32;
 
-use super::VulkanRenderer;
-use super::RendererError;
-
-impl VulkanRenderer {
-pub fn create_swapchain(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
-    let instance = self.instance.as_ref().ok_or(RendererError::NoInstance)?;
-    let surface = self.surface.ok_or(RendererError::NoSurface)?;
-    let surface_loader = self.surface_loader.ok_or(RendererError::NoSurfaceLoader)?;
-    let surface_format = self.surface_format.ok_or(RendererError::NoSurfaceFormat)?;
-    let surface_resolution = self.surface_resolution.ok_or(RendererError::NoSurfaceResolution)?;
-    let device = self.device.as_ref().ok_or(RendererError::NoDevice)?;
-    let physical_device = self.physical_device.ok_or(RendererError::NoPhysicalDevice)?;
-
-    let surface_capabilities = surface_loader.get_physical_device_surface_capabilities_khr(
-        physical_device,
-        surface,
+pub fn new_loader(
+    device: &Device<V1_0>,
+    instance: &Instance<V1_0>,
+) -> Result<Swapchain, Box<Error>> {
+    let swapchain_loader = Swapchain::new(instance, device).map_err(
+        |_| "Unable to load swapchain",
     )?;
+
+    Ok(swapchain_loader)
+}
+
+pub fn new(
+    device: &DeviceV1_0,
+    instance: &Instance<V1_0>,
+    physical_device: vk::PhysicalDevice,
+    surface: vk::SurfaceKHR,
+    surface_loader: &Surface,
+    surface_format: &vk::SurfaceFormatKHR,
+    surface_resolution: &vk::Extent2D,
+    swapchain_loader: &Swapchain,
+) -> Result<vk::SwapchainKHR, Box<Error>> {
+    let surface_capabilities =
+        surface_loader
+            .get_physical_device_surface_capabilities_khr(physical_device, surface)?;
 
     let desired_image_count = {
         let min_count = surface_capabilities.min_image_count;
@@ -48,10 +59,6 @@ pub fn create_swapchain(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         .cloned()
         .find(|&mode| mode == vk::PresentModeKHR::Mailbox)
         .unwrap_or(vk::PresentModeKHR::Fifo);
-
-    let swapchain_loader = Swapchain::new(instance, device).map_err(
-        |_| "Unable to load swapchain",
-    )?;
 
     let swapchain = {
         let swapchain_create_info = vk::SwapchainCreateInfoKHR {
@@ -83,9 +90,5 @@ pub fn create_swapchain(&mut self) -> Result<&mut VulkanRenderer, Box<Error>> {
         }
     };
 
-    self.swapchain = Some(swapchain);
-    self.swapchain_loader = Some(swapchain_loader);
-
-    Ok(self)
-}
+    Ok(swapchain)
 }
