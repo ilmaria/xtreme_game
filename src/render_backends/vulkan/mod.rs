@@ -18,13 +18,12 @@ use ash::Entry;
 use ash::Instance;
 use ash::Device;
 use ash::version::{V1_0, DeviceV1_0};
-use ash::extensions::{Surface, Swapchain, DebugReport};
+use ash::extensions::{Surface, Swapchain};
 use winit;
 
 use std::error::Error;
 use std::u64;
 use std::ptr;
-use std::fmt;
 
 use super::Vertex;
 use super::Renderer;
@@ -64,26 +63,6 @@ impl VulkanRenderer {
         width: u32,
         height: u32,
     ) -> Result<VulkanRenderer, Box<Error>> {
-        // VulkanRenderer::builder()?
-        //     .create_instance()?
-        //     .set_debug_callback()?
-        //     .create_surface_loader()?
-        //     .create_surface()?
-        //     .pick_physical_device()?
-        //     .choose_surface_format()?
-        //     .create_logical_device()?
-        //     .create_swapchain()?
-        //     .create_image_views()?
-        //     .create_depth_view()?
-        //     .create_render_pass()?
-        //     .create_graphics_pipeline()?
-        //     .create_framebuffers()?
-        //     .create_command_pool()?
-        //     //.create_vertex_buffer()?
-        //     .create_command_buffers()?
-        //     .create_semaphores()?
-        //     .build()
-
         let entry = Entry::new().map_err(|_| "Couldn't create new entry")?;
 
         let instance = instance::new(&entry)?;
@@ -108,14 +87,12 @@ impl VulkanRenderer {
         let swapchain_loader = swapchain::new_loader(&device, &instance)?;
 
         let swapchain = swapchain::new(
-            &device,
-            &instance,
+            &swapchain_loader,
             physical_device,
             surface,
             &surface_loader,
             &surface_format,
             &surface_resolution,
-            &swapchain_loader,
         )?;
 
         let (depth_image, depth_image_memory) =
@@ -138,7 +115,7 @@ impl VulkanRenderer {
             depth_image_view,
         )?;
 
-        let command_pool = command_pool::new(&device, &instance, queue_family_index)?;
+        let command_pool = command_pool::new(&device, queue_family_index)?;
 
         let command_buffers =
             command_buffer::new(&device, command_pool, framebuffers.len() as u32)?;

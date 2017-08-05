@@ -1,12 +1,11 @@
 use ash::vk;
 use ash::Instance;
 use ash::Device;
-use ash::version::{V1_0, DeviceV1_0};
+use ash::version::V1_0;
 use ash::extensions::{Swapchain, Surface};
 
 use std::ptr;
 use std::error::Error;
-use std::u32;
 
 pub fn new_loader(
     device: &Device<V1_0>,
@@ -20,14 +19,12 @@ pub fn new_loader(
 }
 
 pub fn new(
-    device: &DeviceV1_0,
-    instance: &Instance<V1_0>,
+    swapchain_loader: &Swapchain,
     physical_device: vk::PhysicalDevice,
     surface: vk::SurfaceKHR,
     surface_loader: &Surface,
     surface_format: &vk::SurfaceFormatKHR,
     surface_resolution: &vk::Extent2D,
-    swapchain_loader: &Swapchain,
 ) -> Result<vk::SwapchainKHR, Box<Error>> {
     let surface_capabilities =
         surface_loader
