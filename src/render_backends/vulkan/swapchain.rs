@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::Instance;
 use ash::Device;
-use ash::version::V1_0;
+use ash::version::{DeviceV1_0, V1_0};
 use ash::extensions::{Swapchain, Surface};
 
 use std::ptr;
@@ -88,4 +88,41 @@ pub fn new(
     };
 
     Ok(swapchain)
+}
+
+pub fn new_semaphores(
+    device: &DeviceV1_0,
+    swapchain_len: usize,
+) -> Result<Vec<vk::Semaphore>, Box<Error>> {
+    let mut semaphores = vec![];
+
+    for i in 0..swapchain_len {
+        let semaphore_info = vk::SemaphoreCreateInfo {
+            s_type: vk::StructureType::SemaphoreCreateInfo,
+            p_next: ptr::null(),
+            flags: Default::default(),
+        };
+
+        let semaphore = unsafe { device.create_semaphore(&semaphore_info, None)? };
+        semaphores.push(semaphore);
+    }
+
+    Ok(semaphores)
+}
+
+pub fn new_fences(device: &DeviceV1_0, swapchain_len: usize) -> Result<Vec<vk::Fence>, Box<Error>> {
+    let mut fences = vec![];
+
+    for i in 0..swapchain_len {
+        let fence_info = vk::FenceCreateInfo {
+            s_type: vk::StructureType::SemaphoreCreateInfo,
+            p_next: ptr::null(),
+            flags: Default::default(),
+        };
+
+        let fence = unsafe { device.create_fence(&fence_info, None)? };
+        fences.push(fence);
+    }
+
+    Ok(fences)
 }

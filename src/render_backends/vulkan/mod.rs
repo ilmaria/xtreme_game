@@ -46,15 +46,16 @@ pub struct VulkanRenderer {
     swapchain: vk::SwapchainKHR,
     present_image_views: Vec<vk::ImageView>,
 
+    current_swapchain_index: u32,
+    swapchain_fences: Vec<vk::Fence>,
+    swapchain_semaphores: Vec<vk::Semaphore>,
+
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
 
     depth_image: vk::Image,
     depth_image_view: vk::ImageView,
     depth_image_memory: vk::DeviceMemory,
-
-    image_available_semaphore: vk::Semaphore,
-    rendering_complete_semaphore: vk::Semaphore,
 }
 
 impl VulkanRenderer {
@@ -102,6 +103,8 @@ impl VulkanRenderer {
         let present_image_views =
             image_views::new(&device, swapchain, &swapchain_loader, &surface_format)?;
 
+        let swapchain_len = present_image_views.len();
+
         let render_pass = render_pass::new(&device, &surface_format)?;
 
         let graphics_pipeline =
@@ -117,11 +120,10 @@ impl VulkanRenderer {
 
         let command_pool = command_pool::new(&device, queue_family_index)?;
 
-        let command_buffers =
-            command_buffer::new(&device, command_pool, framebuffers.len() as u32)?;
+        let command_buffers = command_buffer::new(&device, command_pool, swapchain_len as u32)?;
 
-        let image_available_semaphore = semaphore::new(&device)?;
-        let rendering_complete_semaphore = semaphore::new(&device)?;
+        let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
+        let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
 
         Ok(VulkanRenderer {
             entry,
@@ -141,48 +143,70 @@ impl VulkanRenderer {
             swapchain,
             present_image_views,
 
+            current_swapchain_index: 0,
+            swapchain_fences,
+            swapchain_semaphores,
+
             command_pool,
             command_buffers,
 
             depth_image,
             depth_image_view,
             depth_image_memory,
-
-            image_available_semaphore,
-            rendering_complete_semaphore,
         })
+    }
+
+    #[must_use]
+    unsafe fn acquire_next_image(&mut self) -> Result<(), Box<Error>> {
+        let fence = {
+            let fence_info = vk::FenceCreateInfo {
+                s_type: vk::StructureType::FenceCreateInfo,
+                p_next: ptr::null(),
+                flags: Default::default(),
+            };
+
+            self.device.create_fence(&fence_info, None)?
+        };
+
+        let index = {
+            self.swapchain_loader.acquire_next_image_khr(
+                self.swapchain,
+                u64::MAX,
+                vk::Semaphore::null(),
+                fence,
+            )?
+        };
+
+        self.current_swapchain_index = index;
+
+        self.device.wait_for_fences(&[fence], true, u64::MAX)?;
+        self.device.destroy_fence(fence, None);
+
+        self.device.wait_for_fences(
+            &[self.swapchain_fences[index as usize]],
+            true,
+            u64::MAX,
+        )?;
+
+        Ok(())
     }
 }
 
 impl Renderer for VulkanRenderer {
     fn draw_vertices(&self, vertices: Vec<Vertex>) {}
 
+    #[must_use]
     fn display_frame(&self) -> Result<(), Box<Error>> {
-        let image_index = unsafe {
-            self.device.queue_wait_idle(self.present_queue)?;
-
-            self.swapchain_loader.acquire_next_image_khr(
-                self.swapchain,
-                u64::MAX,
-                self.image_available_semaphore,
-                vk::Fence::null(),
-            )?
-        };
-
-        let wait_semaphores = [self.image_available_semaphore];
-        let signal_semaphores = [self.rendering_complete_semaphore];
-        let wait_mask = [vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT];
-
         let submit_info = vk::SubmitInfo {
             s_type: vk::StructureType::SubmitInfo,
             p_next: ptr::null(),
-            wait_semaphore_count: wait_semaphores.len() as u32,
-            p_wait_semaphores: wait_semaphores.as_ptr(),
-            p_wait_dst_stage_mask: wait_mask.as_ptr(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: [].as_ptr(),
+            p_wait_dst_stage_mask: [].as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: &self.command_buffers[image_index as usize],
-            signal_semaphore_count: signal_semaphores.len() as u32,
-            p_signal_semaphores: signal_semaphores.as_ptr(),
+            p_command_buffers: &self.command_buffers[self.current_swapchain_index as usize],
+            signal_semaphore_count: self.swapchain_semaphores.len() as u32,
+            p_signal_semaphores: self.swapchain_semaphores.as_ptr(),
         };
 
         unsafe {
@@ -196,10 +220,10 @@ impl Renderer for VulkanRenderer {
                 s_type: vk::StructureType::PresentInfoKhr,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: &self.rendering_complete_semaphore,
+                p_wait_semaphores: self.swapchain_semaphores.as_ptr(),
                 swapchain_count: 1,
                 p_swapchains: &self.swapchain,
-                p_image_indices: &image_index,
+                p_image_indices: &self.current_swapchain_index,
                 p_results: ptr::null_mut(),
             };
             self.swapchain_loader.queue_present_khr(
