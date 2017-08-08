@@ -49,6 +49,7 @@ pub struct VulkanRenderer {
     current_swapchain_index: u32,
     swapchain_fences: Vec<vk::Fence>,
     swapchain_semaphores: Vec<vk::Semaphore>,
+    aquire_image_fence: vk::Fence,
 
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -125,6 +126,16 @@ impl VulkanRenderer {
         let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
         let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
 
+        let aquire_image_fence = unsafe {
+            let fence_info = vk::FenceCreateInfo {
+                s_type: vk::StructureType::FenceCreateInfo,
+                p_next: ptr::null(),
+                flags: Default::default(),
+            };
+
+            device.create_fence(&fence_info, None)?
+        };
+
         Ok(VulkanRenderer {
             entry,
             instance,
@@ -146,6 +157,7 @@ impl VulkanRenderer {
             current_swapchain_index: 0,
             swapchain_fences,
             swapchain_semaphores,
+            aquire_image_fence,
 
             command_pool,
             command_buffers,
@@ -157,38 +169,28 @@ impl VulkanRenderer {
     }
 
     #[must_use]
-    unsafe fn acquire_next_image(&mut self) -> Result<(), Box<Error>> {
-        let fence = {
-            let fence_info = vk::FenceCreateInfo {
-                s_type: vk::StructureType::FenceCreateInfo,
-                p_next: ptr::null(),
-                flags: Default::default(),
-            };
-
-            self.device.create_fence(&fence_info, None)?
-        };
+    unsafe fn acquire_next_image(&self) -> Result<u32, Box<Error>> {
+        self.device.reset_fences(&[self.aquire_image_fence])?;
 
         let index = {
             self.swapchain_loader.acquire_next_image_khr(
                 self.swapchain,
                 u64::MAX,
                 vk::Semaphore::null(),
-                fence,
+                self.aquire_image_fence,
             )?
         };
 
-        self.current_swapchain_index = index;
-
-        self.device.wait_for_fences(&[fence], true, u64::MAX)?;
-        self.device.destroy_fence(fence, None);
-
         self.device.wait_for_fences(
-            &[self.swapchain_fences[index as usize]],
+            &[
+                self.swapchain_fences[index as usize],
+                self.aquire_image_fence,
+            ],
             true,
             u64::MAX,
         )?;
 
-        Ok(())
+        Ok(index)
     }
 }
 
@@ -196,7 +198,14 @@ impl Renderer for VulkanRenderer {
     fn draw_vertices(&self, vertices: Vec<Vertex>) {}
 
     #[must_use]
-    fn display_frame(&self) -> Result<(), Box<Error>> {
+    fn display_frame(&mut self) -> Result<(), Box<Error>> {
+        // This is a blocking call
+        self.current_swapchain_index = unsafe { self.acquire_next_image()? };
+
+        let frame_index = self.current_swapchain_index as usize;
+        let frame_semaphore = self.swapchain_semaphores[frame_index];
+        let frame_fence = self.swapchain_fences[frame_index];
+
         let submit_info = vk::SubmitInfo {
             s_type: vk::StructureType::SubmitInfo,
             p_next: ptr::null(),
@@ -204,28 +213,29 @@ impl Renderer for VulkanRenderer {
             p_wait_semaphores: [].as_ptr(),
             p_wait_dst_stage_mask: [].as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: &self.command_buffers[self.current_swapchain_index as usize],
-            signal_semaphore_count: self.swapchain_semaphores.len() as u32,
-            p_signal_semaphores: self.swapchain_semaphores.as_ptr(),
+            p_command_buffers: &self.command_buffers[frame_index],
+            signal_semaphore_count: 1,
+            p_signal_semaphores: [frame_semaphore].as_ptr(),
         };
 
         unsafe {
             self.device.queue_submit(
                 self.present_queue,
                 &[submit_info],
-                vk::Fence::null(),
+                frame_fence,
             )?;
 
             let present_info = vk::PresentInfoKHR {
                 s_type: vk::StructureType::PresentInfoKhr,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: self.swapchain_semaphores.as_ptr(),
+                p_wait_semaphores: [frame_semaphore].as_ptr(),
                 swapchain_count: 1,
                 p_swapchains: &self.swapchain,
                 p_image_indices: &self.current_swapchain_index,
                 p_results: ptr::null_mut(),
             };
+
             self.swapchain_loader.queue_present_khr(
                 self.present_queue,
                 &present_info,
