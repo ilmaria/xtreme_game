@@ -20,6 +20,10 @@ macro_rules! offset_of{
 }
 
 impl Vertex {
+    pub fn new(pos: [f32; 4], color: [f32; 4]) -> Vertex {
+        Vertex { pos, color }
+    }
+
     pub fn binding_descriptions() -> [vk::VertexInputBindingDescription; 1] {
         [
             vk::VertexInputBindingDescription {

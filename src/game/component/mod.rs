@@ -1,5 +1,9 @@
 use cgmath::Vector3;
 
+use std::path::Path;
+
+use super::asset::Model3D;
+
 #[derive(Debug)]
 pub struct Physics {
     pub pos: Vector3<f32>,
@@ -23,7 +27,15 @@ impl Physics {
 
 #[derive(Debug)]
 pub struct Graphics {
-    pub pos: Vector3<f32>,
+    pub model3d: Model3D,
+}
+
+impl Graphics {
+    pub fn new() -> Graphics {
+        Graphics {
+            model3d: Model3D::new(Path::new("model/path")),
+        }
+    }
 }
 
 #[derive(Debug)]

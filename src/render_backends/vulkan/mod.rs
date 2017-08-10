@@ -11,13 +11,13 @@ mod render_pass;
 mod semaphore;
 mod surface;
 mod swapchain;
-mod vertex_buffer;
+mod buffer;
 
 use ash::vk;
 use ash::Entry;
 use ash::Instance;
 use ash::Device;
-use ash::version::{V1_0, DeviceV1_0};
+use ash::version::{DeviceV1_0, V1_0};
 use ash::extensions::{Surface, Swapchain};
 use winit;
 
@@ -57,6 +57,9 @@ pub struct VulkanRenderer {
     depth_image: vk::Image,
     depth_image_view: vk::ImageView,
     depth_image_memory: vk::DeviceMemory,
+
+    staging_buffer: buffer::Buffer,
+    vertex_buffer: buffer::Buffer,
 }
 
 impl VulkanRenderer {
@@ -136,6 +139,24 @@ impl VulkanRenderer {
             device.create_fence(&fence_info, None)?
         };
 
+        let staging_buffer = buffer::Buffer::new(
+            &device,
+            &instance,
+            physical_device,
+            4048,
+            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        )?;
+
+        let vertex_buffer = buffer::Buffer::new(
+            &device,
+            &instance,
+            physical_device,
+            4048,
+            vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        )?;
+
         Ok(VulkanRenderer {
             entry,
             instance,
@@ -165,6 +186,9 @@ impl VulkanRenderer {
             depth_image,
             depth_image_view,
             depth_image_memory,
+
+            staging_buffer,
+            vertex_buffer,
         })
     }
 
@@ -195,7 +219,26 @@ impl VulkanRenderer {
 }
 
 impl Renderer for VulkanRenderer {
-    fn draw_vertices(&self, vertices: Vec<Vertex>) {}
+    fn load_vertices(&self, vertices: Vec<Vertex>) -> Result<(), Box<Error>> {
+        buffer::Buffer::copy_vertices_to_device(
+            &self.device,
+            &self.instance,
+            self.physical_device,
+            self.command_pool,
+            self.present_queue,
+            &self.staging_buffer,
+            &self.vertex_buffer,
+            vertices,
+        )
+    }
+
+    fn draw_vertices(&self, count: u32, offset: u32) -> Result<(), Box<Error>> {
+        let command_buffer = self.command_buffers[self.current_swapchain_index as usize];
+
+        unsafe { self.device.cmd_draw(command_buffer, count, 0, offset, 0) };
+
+        Ok(())
+    }
 
     #[must_use]
     fn display_frame(&mut self) -> Result<(), Box<Error>> {
@@ -219,11 +262,8 @@ impl Renderer for VulkanRenderer {
         };
 
         unsafe {
-            self.device.queue_submit(
-                self.present_queue,
-                &[submit_info],
-                frame_fence,
-            )?;
+            self.device
+                .queue_submit(self.present_queue, &[submit_info], frame_fence)?;
 
             let present_info = vk::PresentInfoKHR {
                 s_type: vk::StructureType::PresentInfoKhr,
@@ -236,18 +276,20 @@ impl Renderer for VulkanRenderer {
                 p_results: ptr::null_mut(),
             };
 
-            self.swapchain_loader.queue_present_khr(
-                self.present_queue,
-                &present_info,
-            )?;
+            self.swapchain_loader
+                .queue_present_khr(self.present_queue, &present_info)?;
         }
 
         Ok(())
     }
 
-    fn update_resolution(&self, width: u64, height: u64) {}
+    fn update_resolution(&self, width: u64, height: u64) -> Result<(), Box<Error>> {
+        Ok(())
+    }
 
-    fn change_settings(&self) {}
+    fn change_settings(&self) -> Result<(), Box<Error>> {
+        Ok(())
+    }
 }
 
 pub fn find_memorytype_index(

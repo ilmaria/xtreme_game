@@ -32,7 +32,7 @@ pub fn render(state: &State) -> Result<String, Box<Error>> {
 
 #[no_mangle]
 pub fn update(state: &State, next_state: &mut State) {
-    system::process_physics(state, next_state)
+    system::process_physics(state, next_state);
 }
 
 #[no_mangle]
