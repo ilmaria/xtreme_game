@@ -18,9 +18,11 @@ fn integrate(obj: &component::Physics, dt: f32) -> component::Physics {
     result
 }
 
-pub fn draw_entities(renderer: &Renderer, state: &State) -> Result<(), Box<Error>> {
-    for (i, _) in state.graphics_components.iter().enumerate() {
-        let model = &state.graphics_components[i].model3d;
+pub fn draw_entities(renderer: &Renderer, state: &mut State) -> Result<(), Box<Error>> {
+    for graphics_component in state.graphics_components.iter_mut() {
+        let model = &mut graphics_component.model3d;
+        model.load(renderer)?;
+
         renderer
             .draw_vertices(model.offset, model.vertices.len() as u32)?;
     }

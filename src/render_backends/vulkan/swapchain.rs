@@ -2,7 +2,7 @@ use ash::vk;
 use ash::Instance;
 use ash::Device;
 use ash::version::{DeviceV1_0, V1_0};
-use ash::extensions::{Swapchain, Surface};
+use ash::extensions::{Surface, Swapchain};
 
 use std::ptr;
 use std::error::Error;
@@ -11,9 +11,8 @@ pub fn new_loader(
     device: &Device<V1_0>,
     instance: &Instance<V1_0>,
 ) -> Result<Swapchain, Box<Error>> {
-    let swapchain_loader = Swapchain::new(instance, device).map_err(
-        |_| "Unable to load swapchain",
-    )?;
+    let swapchain_loader = Swapchain::new(instance, device)
+        .map_err(|_| "Unable to load swapchain")?;
 
     Ok(swapchain_loader)
 }
@@ -26,9 +25,8 @@ pub fn new(
     surface_format: &vk::SurfaceFormatKHR,
     surface_resolution: &vk::Extent2D,
 ) -> Result<vk::SwapchainKHR, Box<Error>> {
-    let surface_capabilities =
-        surface_loader
-            .get_physical_device_surface_capabilities_khr(physical_device, surface)?;
+    let surface_capabilities = surface_loader
+        .get_physical_device_surface_capabilities_khr(physical_device, surface)?;
 
     let desired_image_count = {
         let min_count = surface_capabilities.min_image_count;
@@ -41,9 +39,9 @@ pub fn new(
         }
     };
 
-    let pre_transform = if surface_capabilities.supported_transforms.subset(
-        vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-    )
+    let pre_transform = if surface_capabilities
+        .supported_transforms
+        .subset(vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
     {
         vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR
     } else {
@@ -80,10 +78,8 @@ pub fn new(
         };
 
         unsafe {
-            swapchain_loader.create_swapchain_khr(
-                &swapchain_create_info,
-                None,
-            )?
+            swapchain_loader
+                .create_swapchain_khr(&swapchain_create_info, None)?
         }
     };
 
@@ -96,7 +92,7 @@ pub fn new_semaphores(
 ) -> Result<Vec<vk::Semaphore>, Box<Error>> {
     let mut semaphores = vec![];
 
-    for i in 0..swapchain_len {
+    for _ in 0..swapchain_len {
         let semaphore_info = vk::SemaphoreCreateInfo {
             s_type: vk::StructureType::SemaphoreCreateInfo,
             p_next: ptr::null(),
@@ -113,7 +109,7 @@ pub fn new_semaphores(
 pub fn new_fences(device: &DeviceV1_0, swapchain_len: usize) -> Result<Vec<vk::Fence>, Box<Error>> {
     let mut fences = vec![];
 
-    for i in 0..swapchain_len {
+    for _ in 0..swapchain_len {
         let fence_info = vk::FenceCreateInfo {
             s_type: vk::StructureType::SemaphoreCreateInfo,
             p_next: ptr::null(),

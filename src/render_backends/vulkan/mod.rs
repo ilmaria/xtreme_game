@@ -129,6 +129,12 @@ impl VulkanRenderer {
         let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
         let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
 
+        for &cmd in command_buffers.iter() {
+            unsafe {
+                &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline)
+            };
+        }
+
         let aquire_image_fence = unsafe {
             let fence_info = vk::FenceCreateInfo {
                 s_type: vk::StructureType::FenceCreateInfo,
@@ -229,7 +235,16 @@ impl Renderer for VulkanRenderer {
             &self.staging_buffer,
             &self.vertex_buffer,
             vertices,
-        )
+        )?;
+
+        for &cmd in self.command_buffers.iter() {
+            unsafe {
+                &self.device
+                    .cmd_bind_vertex_buffers(cmd, 0, &[self.vertex_buffer.buf], &[]);
+            };
+        }
+
+        Ok(())
     }
 
     fn draw_vertices(&self, count: u32, offset: u32) -> Result<(), Box<Error>> {

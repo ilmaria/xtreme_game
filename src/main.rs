@@ -10,16 +10,15 @@ pub mod game;
 pub mod renderer;
 pub mod render_backends;
 
-use ash::vk;
-use winit::{KeyboardInput, VirtualKeyCode, Event, WindowEvent};
+use winit::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 use std::mem;
 use std::cmp;
 use std::time;
 
-use game::state::State;
 use os_platform::code_reload::GameLib;
 use render_backends::vulkan::VulkanRenderer;
+use renderer::Renderer;
 
 #[cfg(target_os = "windows")]
 const LIB_PATH: &str = "./target/debug/xtreme_game.dll";
@@ -42,8 +41,7 @@ pub fn main() {
     let mut game = GameLib::new(LIB_PATH);
     let mut last_modified = std::fs::metadata(LIB_PATH).unwrap().modified().unwrap();
 
-    let mut state = State::default();
-    let mut next_state = State::default();
+    let (mut state, mut next_state) = game::init();
 
     let mut curr_time = time::Instant::now();
     let mut time_accumulator = time::Duration::new(0, 0);
@@ -61,11 +59,18 @@ pub fn main() {
         events_loop.poll_events(|event| match event {
             Event::WindowEvent {
                 event: WindowEvent::KeyboardInput {
-                    input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), .. }, ..
+                    input: KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
+                    ..
                 },
                 ..
             } |
-            Event::WindowEvent { event: WindowEvent::Closed, .. } => game_is_running = false,
+            Event::WindowEvent {
+                event: WindowEvent::Closed,
+                ..
+            } => game_is_running = false,
             _ => (),
         });
 
@@ -85,6 +90,6 @@ pub fn main() {
 
         game.render(&state, &renderer).unwrap();
 
-        //renderer.draw_frame();
+        renderer.display_frame().unwrap();
     }
 }

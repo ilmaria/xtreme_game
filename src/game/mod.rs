@@ -9,10 +9,11 @@ use self::entity::Entity;
 
 pub fn init() -> (State, State) {
     let mut state = State::default();
-    let mut next_state = State::default();
+    let next_state = State::default();
 
-    let player = Entity::new(&mut state)
+    Entity::new(&mut state)
         .with_physics(component::Physics::new())
+        .with_graphics(component::Graphics::new())
         .build();
 
     (state, next_state)

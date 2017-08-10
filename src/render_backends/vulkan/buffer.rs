@@ -11,9 +11,9 @@ use super::Vertex;
 use super::find_memorytype_index;
 
 pub struct Buffer {
-    buf: vk::Buffer,
-    memory: vk::DeviceMemory,
-    size: u64,
+    pub buf: vk::Buffer,
+    pub memory: vk::DeviceMemory,
+    pub size: u64,
 }
 
 impl Buffer {
