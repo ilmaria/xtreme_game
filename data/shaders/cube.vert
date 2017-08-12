@@ -1,16 +1,12 @@
-#version 150 core
+#version 410
+#extension GL_ARB_separate_shader_objects : enable
 
-in vec4 a_Pos;
-in vec2 a_TexCoord;
-out vec2 v_TexCoord;
+layout (location = 0) in vec4 pos;
+layout (location = 1) in vec4 color;
 
-layout (std140)
-uniform Locals {
-	mat4 u_Transform;
-};
+layout (location = 0) out vec4 frag_color;
 
 void main() {
-    v_TexCoord = a_TexCoord;
-    gl_Position = u_Transform * a_Pos;
-    gl_ClipDistance[0] = 1.0;
+    frag_color = color;
+    gl_Position = pos;
 }

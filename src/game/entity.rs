@@ -20,12 +20,12 @@ impl<'a> Entity<'a> {
     }
 
     pub fn with_physics(&mut self, component: component::Physics) -> &mut Entity<'a> {
-        self.game_state.physics_components[self.id] = component;
+        self.game_state.physics_components[self.id] = Some(component);
         self
     }
 
     pub fn with_graphics(&mut self, component: component::Graphics) -> &mut Entity<'a> {
-        self.game_state.graphics_components[self.id] = component;
+        self.game_state.graphics_components[self.id] = Some(component);
         self
     }
 

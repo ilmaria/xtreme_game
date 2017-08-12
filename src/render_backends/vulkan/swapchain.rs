@@ -111,7 +111,7 @@ pub fn new_fences(device: &DeviceV1_0, swapchain_len: usize) -> Result<Vec<vk::F
 
     for _ in 0..swapchain_len {
         let fence_info = vk::FenceCreateInfo {
-            s_type: vk::StructureType::SemaphoreCreateInfo,
+            s_type: vk::StructureType::FenceCreateInfo,
             p_next: ptr::null(),
             flags: Default::default(),
         };

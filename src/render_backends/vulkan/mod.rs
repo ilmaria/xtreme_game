@@ -129,9 +129,57 @@ impl VulkanRenderer {
         let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
         let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
 
-        for &cmd in command_buffers.iter() {
+        for (i, &cmd) in command_buffers.iter().enumerate() {
+            let begin_info = vk::CommandBufferBeginInfo {
+                s_type: vk::StructureType::CommandBufferBeginInfo,
+                flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                p_inheritance_info: ptr::null(),
+                p_next: ptr::null(),
+            };
+
+            let clear_values = [
+                vk::ClearValue::new_color(vk::ClearColorValue::new_float32([0.0, 0.0, 0.0, 0.0])),
+                vk::ClearValue::new_depth_stencil(vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                }),
+            ];
+            let render_pass_info = vk::RenderPassBeginInfo {
+                s_type: vk::StructureType::RenderPassBeginInfo,
+                render_pass,
+                framebuffer: framebuffers[i],
+                render_area: vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: surface_resolution.clone(),
+                },
+                clear_value_count: clear_values.len() as u32,
+                p_clear_values: clear_values.as_ptr(),
+                p_next: ptr::null(),
+            };
+
+            let viewports = [
+                vk::Viewport {
+                    x: 0.0,
+                    y: 0.0,
+                    width: surface_resolution.width as f32,
+                    height: surface_resolution.height as f32,
+                    min_depth: 0.0,
+                    max_depth: 1.0,
+                },
+            ];
+            let scissors = [
+                vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: surface_resolution.clone(),
+                },
+            ];
+
             unsafe {
-                &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline)
+                &device.begin_command_buffer(cmd, &begin_info);
+                &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline);
+                &device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::Inline);
+                device.cmd_set_viewport(cmd, &viewports);
+                device.cmd_set_scissor(cmd, &scissors);
             };
         }
 
@@ -258,7 +306,12 @@ impl Renderer for VulkanRenderer {
     #[must_use]
     fn display_frame(&mut self) -> Result<(), Box<Error>> {
         // This is a blocking call
-        self.current_swapchain_index = unsafe { self.acquire_next_image()? };
+        self.current_swapchain_index = unsafe {
+            self.device
+                .cmd_end_render_pass(self.command_buffers[self.current_swapchain_index as usize]);
+
+            self.acquire_next_image()?
+        };
 
         let frame_index = self.current_swapchain_index as usize;
         let frame_semaphore = self.swapchain_semaphores[frame_index];
