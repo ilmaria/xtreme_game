@@ -15,7 +15,7 @@ pub enum ModelState {
 pub struct Model3D {
     pub state: ModelState,
     pub path: &'static Path,
-    pub vertices: Vec<Vertex>,
+    pub vertex_count: u32,
     pub offset: u32,
 }
 
@@ -24,7 +24,7 @@ impl Model3D {
         Model3D {
             state: ModelState::Unloaded,
             path,
-            vertices: vec![],
+            vertex_count: 0,
             offset: 0,
         }
     }
@@ -44,7 +44,10 @@ impl Model3D {
                 Vertex::new([0.0, 0.5, 0.5, 1.0], [0.2, 0.2, 0.8, 1.0]),
             ];
 
-            renderer.load_vertices(vertices)
+            self.vertex_count = vertices.len() as u32;
+
+            renderer.load_vertices(vertices)?;
+            renderer.draw_vertices(self.vertex_count, self.offset)
         } else {
             Ok(())
         }

@@ -17,7 +17,7 @@ pub struct State {
 //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 //         write!(f, "{}", self)
 //     }
-// }
+// },
 
 impl Default for State {
     fn default() -> State {
@@ -27,7 +27,7 @@ impl Default for State {
             sound_components: vec![None; 2048],
             ai_components: vec![None; 2048],
             entities: vec![None; 2048],
-            ..Default::default()
+            delta_time: time::Duration::from_millis(16),
         }
     }
 }

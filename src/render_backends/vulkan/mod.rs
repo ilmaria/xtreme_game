@@ -129,6 +129,43 @@ impl VulkanRenderer {
         let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
         let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
 
+        command_buffer::submit(&device,
+                                command_buffers[0],
+                                present_queue,
+                                &[vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT],
+                                &[],
+                                &[],
+                                |device, setup_command_buffer| {
+            let layout_transition_barrier = vk::ImageMemoryBarrier {
+                s_type: vk::StructureType::ImageMemoryBarrier,
+                p_next: ptr::null(),
+                src_access_mask: Default::default(),
+                dst_access_mask: vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                    vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                old_layout: vk::ImageLayout::Undefined,
+                new_layout: vk::ImageLayout::DepthStencilAttachmentOptimal,
+                src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
+                dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
+                image: depth_image,
+                subresource_range: vk::ImageSubresourceRange {
+                    aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                },
+            };
+
+            unsafe {
+            device.cmd_pipeline_barrier(setup_command_buffer,
+                                        vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                        vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                        vk::DependencyFlags::empty(),
+                                        &[],
+                                        &[],
+                                        &[layout_transition_barrier])};
+        })?;
+
         for (i, &cmd) in command_buffers.iter().enumerate() {
             let begin_info = vk::CommandBufferBeginInfo {
                 s_type: vk::StructureType::CommandBufferBeginInfo,
@@ -174,7 +211,24 @@ impl VulkanRenderer {
                 },
             ];
 
+            let submit_info = vk::SubmitInfo {
+                s_type: vk::StructureType::SubmitInfo,
+                p_next: ptr::null(),
+                wait_semaphore_count: 0,
+                p_wait_semaphores: [].as_ptr(),
+                p_wait_dst_stage_mask: [].as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: &command_buffers[i],
+                signal_semaphore_count: 0,
+                p_signal_semaphores: [].as_ptr(),
+            };
+
             unsafe {
+                &device.begin_command_buffer(cmd, &begin_info);
+                &device.end_command_buffer(cmd);
+                &device.queue_submit(present_queue, &[submit_info], swapchain_fences[i]);
+                &device.wait_for_fences(&[swapchain_fences[i]], true, u64::MAX);
+
                 &device.begin_command_buffer(cmd, &begin_info);
                 &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline);
                 &device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::Inline);
@@ -288,7 +342,7 @@ impl Renderer for VulkanRenderer {
         for &cmd in self.command_buffers.iter() {
             unsafe {
                 &self.device
-                    .cmd_bind_vertex_buffers(cmd, 0, &[self.vertex_buffer.buf], &[]);
+                    .cmd_bind_vertex_buffers(cmd, 0, &[self.vertex_buffer.buf], &[0]);
             };
         }
 
@@ -297,8 +351,13 @@ impl Renderer for VulkanRenderer {
 
     fn draw_vertices(&self, count: u32, offset: u32) -> Result<(), Box<Error>> {
         let command_buffer = self.command_buffers[self.current_swapchain_index as usize];
+        println!("vertex count: {}", count);
+        unsafe {
+            self.device.cmd_draw(command_buffer, count, 1, offset, 0);
 
-        unsafe { self.device.cmd_draw(command_buffer, count, 0, offset, 0) };
+            self.device.cmd_end_render_pass(command_buffer);
+            self.device.end_command_buffer(command_buffer)?;
+        };
 
         Ok(())
     }
@@ -306,16 +365,14 @@ impl Renderer for VulkanRenderer {
     #[must_use]
     fn display_frame(&mut self) -> Result<(), Box<Error>> {
         // This is a blocking call
-        self.current_swapchain_index = unsafe {
-            self.device
-                .cmd_end_render_pass(self.command_buffers[self.current_swapchain_index as usize]);
-
-            self.acquire_next_image()?
-        };
+        self.current_swapchain_index = unsafe { self.acquire_next_image()? };
+        println!("{}", self.current_swapchain_index);
 
         let frame_index = self.current_swapchain_index as usize;
         let frame_semaphore = self.swapchain_semaphores[frame_index];
         let frame_fence = self.swapchain_fences[frame_index];
+
+        unsafe { self.device.reset_fences(&[frame_fence])? };
 
         let submit_info = vk::SubmitInfo {
             s_type: vk::StructureType::SubmitInfo,

@@ -27,9 +27,6 @@ pub fn draw_entities(renderer: &Renderer, state: &mut State) -> Result<(), Box<E
         if let &mut Some(ref mut component) = graphics_component {
             let mut model = &mut component.model3d;
             model.load(renderer)?;
-
-            renderer
-                .draw_vertices(model.offset, model.vertices.len() as u32)?;
         }
     }
 

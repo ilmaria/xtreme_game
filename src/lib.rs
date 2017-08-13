@@ -13,7 +13,7 @@ use game::system;
 use renderer::Renderer;
 
 #[no_mangle]
-pub fn render(renderer: &Renderer, state: &mut State) -> Result<(), Box<Error>> {
+pub fn render(state: &mut State, renderer: &Renderer) -> Result<(), Box<Error>> {
     system::draw_entities(renderer, state)
 }
 
