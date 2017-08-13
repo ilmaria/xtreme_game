@@ -5,13 +5,13 @@ use std::error::Error;
 
 use renderer::{Renderer, Vertex};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ModelState {
     Unloaded,
     Loaded,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model3D {
     pub state: ModelState,
     pub path: &'static Path,

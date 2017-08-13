@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::asset::Model3D;
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Clone)]
 pub struct Physics {
     pub pos: Vector3<f32>,
     pub momentum: Vector3<f32>,
@@ -25,7 +25,7 @@ impl Physics {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Graphics {
     pub model3d: Model3D,
 }
@@ -38,17 +38,17 @@ impl Graphics {
     }
 }
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Clone)]
 pub struct Sound {
     pub pos: Vector3<f32>,
 }
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Clone)]
 pub struct AI {
     pub pos: Vector3<f32>,
 }
 
-#[derive(Debug, Copy)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     pub pos: Vector3<f32>,
 }

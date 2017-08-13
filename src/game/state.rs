@@ -6,11 +6,11 @@ use super::component;
 
 pub struct State {
     pub delta_time: time::Duration,
-    pub physics_components: [Option<component::Physics>; 2048],
-    pub graphics_components: [Option<component::Graphics>; 2048],
-    pub sound_components: [Option<component::Sound>; 2048],
-    pub ai_components: [Option<component::AI>; 2048],
-    pub entities: [Option<component::Entity>; 2048],
+    pub physics_components: Vec<Option<component::Physics>>,
+    pub graphics_components: Vec<Option<component::Graphics>>,
+    pub sound_components: Vec<Option<component::Sound>>,
+    pub ai_components: Vec<Option<component::AI>>,
+    pub entities: Vec<Option<component::Entity>>,
 }
 
 // impl fmt::Debug for State {
@@ -22,7 +22,12 @@ pub struct State {
 impl Default for State {
     fn default() -> State {
         State {
-            physics_components: [None; 2048],
+            physics_components: vec![None; 2048],
+            graphics_components: vec![None; 2048],
+            sound_components: vec![None; 2048],
+            ai_components: vec![None; 2048],
+            entities: vec![None; 2048],
+            ..Default::default()
         }
     }
 }
