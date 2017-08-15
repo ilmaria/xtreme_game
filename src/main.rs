@@ -88,9 +88,7 @@ pub fn main() {
         let alpha = time_accumulator.subsec_nanos() as f64 / state.delta_time.subsec_nanos() as f64;
         game.interpolate(&state, &mut next_state, alpha);
         println!("after interpolate");
-        game.render(&state, &renderer).unwrap();
+        game.render(&state, &mut renderer).unwrap();
         println!("after render");
-        renderer.display_frame().unwrap();
-        println!("after display frame");
     }
 }

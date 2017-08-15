@@ -16,10 +16,10 @@ impl GameLib {
         GameLib(Library::new(lib_copy_path).unwrap())
     }
 
-    pub fn render(&self, state: &State, renderer: &Renderer) -> Result<(), Box<Error>> {
+    pub fn render(&self, state: &State, renderer: &mut Renderer) -> Result<(), Box<Error>> {
         unsafe {
             let func = self.0
-                .get::<fn(&State, &Renderer) -> Result<(), Box<Error>>>(b"render")
+                .get::<fn(&State, &mut Renderer) -> Result<(), Box<Error>>>(b"render")
                 .unwrap();
             func(state, renderer)
         }

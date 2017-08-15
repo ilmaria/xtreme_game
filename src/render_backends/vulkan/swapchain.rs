@@ -2,26 +2,70 @@ use ash::vk;
 use ash::Instance;
 use ash::Device;
 use ash::version::{DeviceV1_0, V1_0};
-use ash::extensions::{Surface, Swapchain};
+use ash::extensions::Surface as SurfaceLoader;
+use ash::extensions::Swapchain as SwapchainLoader;
 
 use std::ptr;
 use std::error::Error;
 
+pub struct Frame {
+    pub present_image_view: vk::ImageView,
+    pub framebuffer: vk::Framebuffer,
+    pub command_buffer: vk::CommandBuffer,
+    pub acquire_image_semaphore: vk::Semaphore,
+    pub render_finished_semaphore: vk::Semaphore,
+}
+
+impl Frame {
+    pub fn new(
+        device: &DeviceV1_0,
+        present_image_view: vk::ImageView,
+        framebuffer: vk::Framebuffer,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<Frame, Box<Error>> {
+        let acquire_image_semaphore = unsafe {
+            let semaphore_info = vk::SemaphoreCreateInfo {
+                s_type: vk::StructureType::SemaphoreCreateInfo,
+                p_next: ptr::null(),
+                flags: Default::default(),
+            };
+            device.create_semaphore(&semaphore_info, None)?
+        };
+
+        let render_finished_semaphore = unsafe {
+            let semaphore_info = vk::SemaphoreCreateInfo {
+                s_type: vk::StructureType::SemaphoreCreateInfo,
+                p_next: ptr::null(),
+                flags: Default::default(),
+            };
+            device.create_semaphore(&semaphore_info, None)?
+        };
+
+        Ok(Frame {
+            present_image_view,
+            framebuffer,
+            command_buffer,
+            acquire_image_semaphore,
+            render_finished_semaphore,
+        })
+    }
+}
+
 pub fn new_loader(
     device: &Device<V1_0>,
     instance: &Instance<V1_0>,
-) -> Result<Swapchain, Box<Error>> {
-    let swapchain_loader = Swapchain::new(instance, device)
+) -> Result<SwapchainLoader, Box<Error>> {
+    let swapchain_loader = SwapchainLoader::new(instance, device)
         .map_err(|_| "Unable to load swapchain")?;
 
     Ok(swapchain_loader)
 }
 
 pub fn new(
-    swapchain_loader: &Swapchain,
+    swapchain_loader: &SwapchainLoader,
     physical_device: vk::PhysicalDevice,
     surface: vk::SurfaceKHR,
-    surface_loader: &Surface,
+    surface_loader: &SurfaceLoader,
     surface_format: &vk::SurfaceFormatKHR,
     surface_resolution: &vk::Extent2D,
 ) -> Result<vk::SwapchainKHR, Box<Error>> {

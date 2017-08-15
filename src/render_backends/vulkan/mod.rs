@@ -35,24 +35,19 @@ pub struct VulkanRenderer {
 
     physical_device: vk::PhysicalDevice,
     queue_family_index: u32,
-    present_queue: vk::Queue,
+    graphics_queue: vk::Queue,
 
     surface_loader: Surface,
     surface: vk::SurfaceKHR,
     surface_format: vk::SurfaceFormatKHR,
     surface_resolution: vk::Extent2D,
 
+    frame_index: u32,
     swapchain_loader: Swapchain,
     swapchain: vk::SwapchainKHR,
-    present_image_views: Vec<vk::ImageView>,
-
-    current_swapchain_index: u32,
-    swapchain_fences: Vec<vk::Fence>,
-    swapchain_semaphores: Vec<vk::Semaphore>,
-    aquire_image_fence: vk::Fence,
+    swapchain_frames: Vec<swapchain::Frame>,
 
     command_pool: vk::CommandPool,
-    command_buffers: Vec<vk::CommandBuffer>,
 
     depth_image: vk::Image,
     depth_image_view: vk::ImageView,
@@ -87,7 +82,7 @@ impl VulkanRenderer {
 
         let device = device::new(&instance, queue_family_index, physical_device)?;
 
-        let present_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
+        let graphics_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
 
         let swapchain_loader = swapchain::new_loader(&device, &instance)?;
 
@@ -126,12 +121,22 @@ impl VulkanRenderer {
 
         let command_buffers = command_buffer::new(&device, command_pool, swapchain_len as u32)?;
 
-        let swapchain_fences = swapchain::new_fences(&device, swapchain_len)?;
-        let swapchain_semaphores = swapchain::new_semaphores(&device, swapchain_len)?;
+        let swapchain_frames = {
+            let mut frames = vec![];
+            for i in 0..swapchain_len {
+                frames.push(swapchain::Frame::new(
+                    &device,
+                    present_image_views[i],
+                    framebuffers[i],
+                    command_buffers[i],
+                )?);
+            }
+            frames
+        };
 
         command_buffer::submit(&device,
-                                command_buffers[0],
-                                present_queue,
+                                swapchain_frames[0].command_buffer,
+                                graphics_queue,
                                 &[vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT],
                                 &[],
                                 &[],
@@ -166,14 +171,7 @@ impl VulkanRenderer {
                                         &[layout_transition_barrier])};
         })?;
 
-        for (i, &cmd) in command_buffers.iter().enumerate() {
-            let begin_info = vk::CommandBufferBeginInfo {
-                s_type: vk::StructureType::CommandBufferBeginInfo,
-                flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-                p_inheritance_info: ptr::null(),
-                p_next: ptr::null(),
-            };
-
+        for (i, &command_buffer) in command_buffers.iter().enumerate() {
             let clear_values = [
                 vk::ClearValue::new_color(vk::ClearColorValue::new_float32([0.0, 0.0, 0.0, 0.0])),
                 vk::ClearValue::new_depth_stencil(vk::ClearDepthStencilValue {
@@ -211,41 +209,22 @@ impl VulkanRenderer {
                 },
             ];
 
-            let submit_info = vk::SubmitInfo {
-                s_type: vk::StructureType::SubmitInfo,
-                p_next: ptr::null(),
-                wait_semaphore_count: 0,
-                p_wait_semaphores: [].as_ptr(),
-                p_wait_dst_stage_mask: [].as_ptr(),
-                command_buffer_count: 1,
-                p_command_buffers: &command_buffers[i],
-                signal_semaphore_count: 0,
-                p_signal_semaphores: [].as_ptr(),
-            };
-
             unsafe {
-                &device.begin_command_buffer(cmd, &begin_info);
-                &device.end_command_buffer(cmd);
-                &device.queue_submit(present_queue, &[submit_info], swapchain_fences[i]);
-                &device.wait_for_fences(&[swapchain_fences[i]], true, u64::MAX);
-
-                &device.begin_command_buffer(cmd, &begin_info);
-                &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline);
-                &device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::Inline);
-                device.cmd_set_viewport(cmd, &viewports);
-                device.cmd_set_scissor(cmd, &scissors);
+                command_buffer::submit(
+                    &device,
+                    command_buffer,
+                    graphics_queue,
+                    &[vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT],
+                    &[],
+                    &[],
+                    |device, cmd| {
+                        &device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::Graphics, graphics_pipeline);
+                        &device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::Inline);
+                        device.cmd_set_viewport(cmd, &viewports);
+                        device.cmd_set_scissor(cmd, &scissors);
+                })?;
             };
         }
-
-        let aquire_image_fence = unsafe {
-            let fence_info = vk::FenceCreateInfo {
-                s_type: vk::StructureType::FenceCreateInfo,
-                p_next: ptr::null(),
-                flags: Default::default(),
-            };
-
-            device.create_fence(&fence_info, None)?
-        };
 
         let staging_buffer = buffer::Buffer::new(
             &device,
@@ -272,7 +251,7 @@ impl VulkanRenderer {
 
             physical_device,
             queue_family_index,
-            present_queue,
+            graphics_queue,
 
             surface_loader,
             surface,
@@ -281,15 +260,10 @@ impl VulkanRenderer {
 
             swapchain_loader,
             swapchain,
-            present_image_views,
-
-            current_swapchain_index: 0,
-            swapchain_fences,
-            swapchain_semaphores,
-            aquire_image_fence,
+            swapchain_frames,
+            frame_index: 0,
 
             command_pool,
-            command_buffers,
 
             depth_image,
             depth_image_view,
@@ -299,119 +273,114 @@ impl VulkanRenderer {
             vertex_buffer,
         })
     }
-
-    #[must_use]
-    unsafe fn acquire_next_image(&self) -> Result<u32, Box<Error>> {
-        self.device.reset_fences(&[self.aquire_image_fence])?;
-
-        let index = {
-            self.swapchain_loader.acquire_next_image_khr(
-                self.swapchain,
-                u64::MAX,
-                vk::Semaphore::null(),
-                self.aquire_image_fence,
-            )?
-        };
-
-        self.device.wait_for_fences(
-            &[
-                self.swapchain_fences[index as usize],
-                self.aquire_image_fence,
-            ],
-            true,
-            u64::MAX,
-        )?;
-
-        Ok(index)
-    }
 }
 
 impl Renderer for VulkanRenderer {
+    #[must_use]
     fn load_vertices(&self, vertices: Vec<Vertex>) -> Result<(), Box<Error>> {
-        buffer::Buffer::copy_vertices_to_device(
-            &self.device,
-            &self.instance,
-            self.physical_device,
-            self.command_pool,
-            self.present_queue,
-            &self.staging_buffer,
-            &self.vertex_buffer,
-            vertices,
-        )?;
+        // buffer::Buffer::copy_vertices_to_device(
+        //     &self.device,
+        //     &self.instance,
+        //     self.physical_device,
+        //     self.command_pool,
+        //     self.graphics_queue,
+        //     &self.staging_buffer,
+        //     &self.vertex_buffer,
+        //     vertices,
+        // )?;
 
-        for &cmd in self.command_buffers.iter() {
-            unsafe {
-                &self.device
-                    .cmd_bind_vertex_buffers(cmd, 0, &[self.vertex_buffer.buf], &[0]);
-            };
-        }
+        // for ref frame in self.swapchain_frames.iter() {
+        //     let cmd = frame.command_buffer;
 
-        Ok(())
-    }
-
-    fn draw_vertices(&self, count: u32, offset: u32) -> Result<(), Box<Error>> {
-        let command_buffer = self.command_buffers[self.current_swapchain_index as usize];
-        println!("vertex count: {}", count);
-        unsafe {
-            self.device.cmd_draw(command_buffer, count, 1, offset, 0);
-
-            self.device.cmd_end_render_pass(command_buffer);
-            self.device.end_command_buffer(command_buffer)?;
-        };
+        //     unsafe {
+        //         &self.device
+        //             .cmd_bind_vertex_buffers(cmd, 0, &[self.vertex_buffer.buf], &[0]);
+        //     };
+        // }
 
         Ok(())
     }
 
     #[must_use]
-    fn display_frame(&mut self) -> Result<(), Box<Error>> {
-        // This is a blocking call
-        self.current_swapchain_index = unsafe { self.acquire_next_image()? };
-        println!("{}", self.current_swapchain_index);
+    fn draw_vertices(&self, count: u32, offset: u32) -> Result<(), Box<Error>> {
+        // let frame = &self.swapchain_frames[self.frame_index as usize];
 
-        let frame_index = self.current_swapchain_index as usize;
-        let frame_semaphore = self.swapchain_semaphores[frame_index];
-        let frame_fence = self.swapchain_fences[frame_index];
+        // unsafe {
+        //     self.device.cmd_draw(frame.command_buffer, count, 1, offset, 0);
 
-        unsafe { self.device.reset_fences(&[frame_fence])? };
+        //     self.device.cmd_end_render_pass(frame.command_buffer);
+        //     self.device.end_command_buffer(frame.command_buffer)?;
+        // };
+
+        Ok(())
+    }
+
+    #[must_use]
+    fn begin_frame(&mut self) -> Result<(), Box<Error>> {
+        unsafe { self.device.queue_wait_idle(self.graphics_queue)? };
+
+        let frame = &self.swapchain_frames[self.frame_index as usize];
+
+        let index = unsafe {
+            self.swapchain_loader.acquire_next_image_khr(
+                self.swapchain,
+                u64::MAX,
+                frame.acquire_image_semaphore,
+                vk::Fence::null(),
+            )?
+        };
+
+        self.frame_index = index;
+
+        Ok(())
+    }
+
+    #[must_use]
+    fn end_frame(&mut self) -> Result<(), Box<Error>> {
+        println!("{}", self.frame_index);
+
+        let frame = &self.swapchain_frames[self.frame_index as usize];
 
         let submit_info = vk::SubmitInfo {
             s_type: vk::StructureType::SubmitInfo,
             p_next: ptr::null(),
-            wait_semaphore_count: 0,
-            p_wait_semaphores: [].as_ptr(),
+            wait_semaphore_count: 1,
+            p_wait_semaphores: [frame.acquire_image_semaphore].as_ptr(),
             p_wait_dst_stage_mask: [].as_ptr(),
             command_buffer_count: 1,
-            p_command_buffers: &self.command_buffers[frame_index],
+            p_command_buffers: &frame.command_buffer,
             signal_semaphore_count: 1,
-            p_signal_semaphores: [frame_semaphore].as_ptr(),
+            p_signal_semaphores: [frame.render_finished_semaphore].as_ptr(),
         };
 
         unsafe {
             self.device
-                .queue_submit(self.present_queue, &[submit_info], frame_fence)?;
+                .queue_submit(self.graphics_queue, &[submit_info], vk::Fence::null())?;
 
             let present_info = vk::PresentInfoKHR {
                 s_type: vk::StructureType::PresentInfoKhr,
                 p_next: ptr::null(),
                 wait_semaphore_count: 1,
-                p_wait_semaphores: [frame_semaphore].as_ptr(),
+                p_wait_semaphores: [frame.render_finished_semaphore].as_ptr(),
                 swapchain_count: 1,
                 p_swapchains: &self.swapchain,
-                p_image_indices: &self.current_swapchain_index,
+                p_image_indices: &self.frame_index,
                 p_results: ptr::null_mut(),
             };
 
             self.swapchain_loader
-                .queue_present_khr(self.present_queue, &present_info)?;
+                .queue_present_khr(self.graphics_queue, &present_info)?;
         }
 
         Ok(())
     }
 
+    #[must_use]
     fn update_resolution(&self, width: u64, height: u64) -> Result<(), Box<Error>> {
         Ok(())
     }
 
+    #[must_use]
     fn change_settings(&self) -> Result<(), Box<Error>> {
         Ok(())
     }
