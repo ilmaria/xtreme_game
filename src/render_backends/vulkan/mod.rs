@@ -1,5 +1,4 @@
-mod command_buffer;
-mod command_pool;
+mod command;
 mod debug_callback;
 mod device;
 mod framebuffers;
@@ -117,9 +116,9 @@ impl VulkanRenderer {
             depth_image_view,
         )?;
 
-        let command_pool = command_pool::new(&device, queue_family_index)?;
+        let command_pool = command::new_pool(&device, queue_family_index)?;
 
-        let command_buffers = command_buffer::new(&device, command_pool, swapchain_len as u32)?;
+        let command_buffers = command::new_buffers(&device, command_pool, swapchain_len as u32)?;
 
         let swapchain_frames = {
             let mut frames = vec![];
@@ -134,7 +133,7 @@ impl VulkanRenderer {
             frames
         };
 
-        command_buffer::submit(&device,
+        command::submit(&device,
                                 swapchain_frames[0].command_buffer,
                                 graphics_queue,
                                 &[vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT],
@@ -210,7 +209,7 @@ impl VulkanRenderer {
             ];
 
             unsafe {
-                command_buffer::submit(
+                command::submit(
                     &device,
                     command_buffer,
                     graphics_queue,

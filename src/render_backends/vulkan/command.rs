@@ -2,10 +2,26 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 
 use std::ptr;
-use std::error::Error;
 use std::u64;
+use std::error::Error;
 
-pub fn new(
+pub fn new_pool(
+    device: &DeviceV1_0,
+    queue_family_index: u32,
+) -> Result<vk::CommandPool, Box<Error>> {
+    let pool_create_info = vk::CommandPoolCreateInfo {
+        s_type: vk::StructureType::CommandPoolCreateInfo,
+        p_next: ptr::null(),
+        flags: vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        queue_family_index,
+    };
+
+    let command_pool = unsafe { device.create_command_pool(&pool_create_info, None)? };
+
+    Ok(command_pool)
+}
+
+pub fn new_buffers(
     device: &DeviceV1_0,
     command_pool: vk::CommandPool,
     count: u32,
@@ -20,9 +36,8 @@ pub fn new(
     };
 
     let command_buffers = unsafe {
-        device.allocate_command_buffers(
-            &command_buffer_allocate_info,
-        )?
+        device
+            .allocate_command_buffers(&command_buffer_allocate_info)?
     };
 
     Ok(command_buffers)
@@ -51,10 +66,8 @@ pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
     };
 
     unsafe {
-        device.begin_command_buffer(
-            command_buffer,
-            &command_buffer_begin_info,
-        )?;
+        device
+            .begin_command_buffer(command_buffer, &command_buffer_begin_info)?;
     }
 
     f(device, command_buffer);
@@ -81,11 +94,8 @@ pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
         p_signal_semaphores: signal_semaphores.as_ptr(),
     };
     unsafe {
-        device.queue_submit(
-            submit_queue,
-            &[submit_info],
-            submit_fence,
-        )?;
+        device
+            .queue_submit(submit_queue, &[submit_info], submit_fence)?;
 
         device.wait_for_fences(&[submit_fence], true, u64::MAX)?;
         device.destroy_fence(submit_fence, None);
