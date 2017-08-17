@@ -10,6 +10,8 @@ pub trait Renderer {
     fn end_frame(&mut self) -> Result<(), Box<Error>>;
     fn update_resolution(&self, width: u64, height: u64) -> Result<(), Box<Error>>;
     fn change_settings(&self) -> Result<(), Box<Error>>;
+    fn update_model(&mut self, id: u32, vertices: &Vec<Vertex>) -> Result<(), Box<Error>>;
+    fn update_descriptors(&mut self, id: u32, vertices: &Vec<Vertex>) -> Result<(), Box<Error>>;
 }
 
 #[derive(Debug, Clone)]

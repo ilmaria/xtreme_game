@@ -1,10 +1,10 @@
-mod graphics;
-mod physics;
+pub mod graphics;
+pub mod physics;
 
 use cgmath::Vector3;
 
-pub use graphics::*;
-pub use physics::*;
+pub use self::graphics::Graphics;
+pub use self::physics::Physics;
 
 #[derive(Debug, Clone)]
 pub struct Sound {

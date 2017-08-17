@@ -1,8 +1,10 @@
 pub mod state;
 pub mod system;
 pub mod component;
-pub mod asset;
 pub mod entity;
+pub mod asset;
+
+use std::path::Path;
 
 use self::state::State;
 use self::entity::Entity;

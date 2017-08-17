@@ -120,7 +120,7 @@ fn copy_buffer(
     unsafe {
         let command_buffer = device.allocate_command_buffers(&alloc_info)?[0];
 
-        super::command_buffer::submit(
+        super::command::submit(
             device,
             command_buffer,
             present_queue,

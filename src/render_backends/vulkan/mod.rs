@@ -1,5 +1,4 @@
 mod command;
-mod debug_callback;
 mod device;
 mod framebuffers;
 mod graphics_pipeline;
@@ -17,12 +16,13 @@ use ash::Entry;
 use ash::Instance;
 use ash::Device;
 use ash::version::{DeviceV1_0, V1_0};
-use ash::extensions::{Surface, Swapchain};
+use ash::extensions::{Surface, Swapchain, DebugReport};
 use winit;
 
 use std::error::Error;
 use std::u64;
 use std::ptr;
+use std::ffi::CStr;
 
 use super::Vertex;
 use super::Renderer;
@@ -66,7 +66,7 @@ impl VulkanRenderer {
 
         let instance = instance::new(&entry)?;
 
-        debug_callback::new(&entry, &instance)?;
+        set_debug_callback(&entry, &instance)?;
 
         let surface_loader = surface::new_loader(&entry, &instance)?;
 
@@ -276,6 +276,34 @@ impl VulkanRenderer {
 
 impl Renderer for VulkanRenderer {
     #[must_use]
+    fn update_model(&mut self, id: u32, vertices: &Vec<Vertex>) -> Result<(), Box<Error>> {
+        // let frame = &self.swapchain_frames[self.frame_index as usize];
+
+        // unsafe {
+        //     self.device.cmd_draw(frame.command_buffer, count, 1, offset, 0);
+
+        //     self.device.cmd_end_render_pass(frame.command_buffer);
+        //     self.device.end_command_buffer(frame.command_buffer)?;
+        // };
+
+        Ok(())
+    }
+
+    #[must_use]
+    fn update_descriptors(&mut self, id: u32, vertices: &Vec<Vertex>) -> Result<(), Box<Error>> {
+        // let frame = &self.swapchain_frames[self.frame_index as usize];
+
+        // unsafe {
+        //     self.device.cmd_draw(frame.command_buffer, count, 1, offset, 0);
+
+        //     self.device.cmd_end_render_pass(frame.command_buffer);
+        //     self.device.end_command_buffer(frame.command_buffer)?;
+        // };
+
+        Ok(())
+    }
+
+    #[must_use]
     fn load_vertices(&self, vertices: Vec<Vertex>) -> Result<(), Box<Error>> {
         // buffer::Buffer::copy_vertices_to_device(
         //     &self.device,
@@ -422,4 +450,42 @@ fn find_memorytype_index_f<F: Fn(vk::MemoryPropertyFlags, vk::MemoryPropertyFlag
     Err(
         "Unable to find suitable memory index for depth image.".to_owned(),
     )
+}
+
+pub fn set_debug_callback(entry: &Entry<V1_0>, instance: &Instance<V1_0>) -> Result<(), Box<Error>> {
+    let debug_info = vk::DebugReportCallbackCreateInfoEXT {
+        s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
+        p_next: ptr::null(),
+        flags: vk::DEBUG_REPORT_ERROR_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT |
+            vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
+        pfn_callback: vulkan_debug_callback,
+        p_user_data: ptr::null_mut(),
+    };
+
+    let debug_report_loader = DebugReport::new(entry, instance).map_err(
+        |_| "Couldn't create debug repoprt loader",
+    )?;
+
+    let callback = unsafe {
+        debug_report_loader.create_debug_report_callback_ext(
+            &debug_info,
+            None,
+        )?
+    };
+
+    Ok(())
+}
+
+unsafe extern "system" fn vulkan_debug_callback(
+    _: vk::DebugReportFlagsEXT,
+    _: vk::DebugReportObjectTypeEXT,
+    _: vk::uint64_t,
+    _: vk::size_t,
+    _: vk::int32_t,
+    _: *const vk::c_char,
+    p_message: *const vk::c_char,
+    _: *mut vk::c_void,
+) -> u32 {
+    println!("{:?}", CStr::from_ptr(p_message));
+    1
 }
