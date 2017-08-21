@@ -1,9 +1,5 @@
-use cgmath::Vector3;
-
 use std::path::Path;
-use std::error::Error;
 
-use renderer::Vertex;
 use super::super::asset;
 
 #[derive(PartialEq, Debug, Clone)]

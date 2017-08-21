@@ -10,14 +10,24 @@ use std::error::Error;
 use super::Vertex;
 use super::find_memorytype_index;
 
+const BUFFER_SIZE: u64 = 256 * 1024 * 1024;
+
+pub struct Allocator {
+    buffers: Vec<Buffer>,
+}
+
 pub struct Buffer {
     pub buf: vk::Buffer,
     pub memory: vk::DeviceMemory,
     pub size: u64,
 }
 
-impl Buffer {
-    pub fn new(
+impl Allocator {
+    pub fn new() -> Allocator {
+        Allocator { buffers: vec![] }
+    }
+
+    pub fn alloc_buffer(
         device: &DeviceV1_0,
         instance: &Instance<V1_0>,
         physical_device: vk::PhysicalDevice,
@@ -61,44 +71,44 @@ impl Buffer {
             size: buffer_size,
         })
     }
+}
 
-    pub fn copy_vertices_to_device(
-        device: &DeviceV1_0,
-        instance: &Instance<V1_0>,
-        physical_device: vk::PhysicalDevice,
-        command_pool: vk::CommandPool,
-        present_queue: vk::Queue,
-        staging_buffer: &Buffer,
-        vertex_buffer: &Buffer,
-        vertices: Vec<Vertex>,
-    ) -> Result<(), Box<Error>> {
-        unsafe {
-            let vert_ptr = device.map_memory(
-                staging_buffer.memory,
-                0,
-                staging_buffer.size,
-                vk::MemoryMapFlags::empty(),
-            )?;
-            let mut vert_align = util::Align::new(
-                vert_ptr,
-                mem::align_of::<Vertex>() as u64,
-                staging_buffer.size,
-            );
-            vert_align.copy_from_slice(&vertices);
-            device.unmap_memory(staging_buffer.memory);
-        }
-
-        copy_buffer(
-            device,
-            command_pool,
-            present_queue,
-            staging_buffer.buf,
-            vertex_buffer.buf,
+pub fn copy_vertices_to_device(
+    device: &DeviceV1_0,
+    instance: &Instance<V1_0>,
+    physical_device: vk::PhysicalDevice,
+    command_pool: vk::CommandPool,
+    present_queue: vk::Queue,
+    staging_buffer: &Buffer,
+    vertex_buffer: &Buffer,
+    vertices: Vec<Vertex>,
+) -> Result<(), Box<Error>> {
+    unsafe {
+        let vert_ptr = device.map_memory(
+            staging_buffer.memory,
+            0,
             staging_buffer.size,
+            vk::MemoryMapFlags::empty(),
         )?;
-
-        Ok(())
+        let mut vert_align = util::Align::new(
+            vert_ptr,
+            mem::align_of::<Vertex>() as u64,
+            staging_buffer.size,
+        );
+        vert_align.copy_from_slice(&vertices);
+        device.unmap_memory(staging_buffer.memory);
     }
+
+    copy_buffer(
+        device,
+        command_pool,
+        present_queue,
+        staging_buffer.buf,
+        vertex_buffer.buf,
+        staging_buffer.size,
+    )?;
+
+    Ok(())
 }
 
 fn copy_buffer(
