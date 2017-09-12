@@ -28,13 +28,14 @@ impl Allocator {
     }
 
     pub fn alloc_buffer(
+        &mut self,
         device: &DeviceV1_0,
         instance: &Instance<V1_0>,
         physical_device: vk::PhysicalDevice,
         buffer_size: u64,
         usage: vk::BufferUsageFlags,
         properties: vk::MemoryPropertyFlags,
-    ) -> Result<Buffer, Box<Error>> {
+    ) -> Result<usize, Box<Error>> {
         let buffer_info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BufferCreateInfo,
             p_next: ptr::null(),
@@ -65,11 +66,13 @@ impl Allocator {
             buffer_memory
         };
 
-        Ok(Buffer {
+        self.buffers.push(Buffer {
             buf: buffer,
             memory: buffer_memory,
             size: buffer_size,
-        })
+        });
+
+        Ok(self.buffers.len() - 1)
     }
 }
 

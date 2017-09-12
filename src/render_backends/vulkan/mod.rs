@@ -52,8 +52,9 @@ pub struct VulkanRenderer {
     depth_image_view: vk::ImageView,
     depth_image_memory: vk::DeviceMemory,
 
-    staging_buffer: buffer::Buffer,
-    vertex_buffer: buffer::Buffer,
+    allocator: buffer::Allocator,
+    staging_buffer: usize,
+    vertex_buffer: usize,
 }
 
 impl VulkanRenderer {
@@ -225,7 +226,9 @@ impl VulkanRenderer {
             };
         }
 
-        let staging_buffer = buffer::Buffer::new(
+        let mut allocator = buffer::Allocator::new();
+
+        let staging_buffer = allocator.alloc_buffer(
             &device,
             &instance,
             physical_device,
@@ -234,7 +237,7 @@ impl VulkanRenderer {
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
         )?;
 
-        let vertex_buffer = buffer::Buffer::new(
+        let vertex_buffer = allocator.alloc_buffer(
             &device,
             &instance,
             physical_device,
@@ -268,6 +271,7 @@ impl VulkanRenderer {
             depth_image_view,
             depth_image_memory,
 
+            allocator,
             staging_buffer,
             vertex_buffer,
         })
