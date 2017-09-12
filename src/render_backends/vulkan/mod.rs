@@ -226,21 +226,19 @@ impl VulkanRenderer {
             };
         }
 
-        let mut allocator = buffer::Allocator::new();
+        let mut allocator = buffer::Allocator::new(physical_device);
 
-        let staging_buffer = allocator.alloc_buffer(
+        let staging_buffer = allocator.create_buffer(
             &device,
             &instance,
-            physical_device,
             4048,
             vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
         )?;
 
-        let vertex_buffer = allocator.alloc_buffer(
+        let vertex_buffer = allocator.create_buffer(
             &device,
             &instance,
-            physical_device,
             4048,
             vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
             vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,

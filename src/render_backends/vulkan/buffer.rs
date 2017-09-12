@@ -14,6 +14,7 @@ const BUFFER_SIZE: u64 = 256 * 1024 * 1024;
 
 pub struct Allocator {
     buffers: Vec<Buffer>,
+    physical_device: vk::PhysicalDevice,
 }
 
 pub struct Buffer {
@@ -23,15 +24,17 @@ pub struct Buffer {
 }
 
 impl Allocator {
-    pub fn new() -> Allocator {
-        Allocator { buffers: vec![] }
+    pub fn new(physical_device: vk::PhysicalDevice) -> Allocator {
+        Allocator {
+            buffers: vec![],
+            physical_device,
+        }
     }
 
-    pub fn alloc_buffer(
+    pub fn create_buffer(
         &mut self,
         device: &DeviceV1_0,
         instance: &Instance<V1_0>,
-        physical_device: vk::PhysicalDevice,
         buffer_size: u64,
         usage: vk::BufferUsageFlags,
         properties: vk::MemoryPropertyFlags,
@@ -50,7 +53,8 @@ impl Allocator {
         let buffer = unsafe { device.create_buffer(&buffer_info, None)? };
 
         let memory_requirements = device.get_buffer_memory_requirements(buffer);
-        let memory_properties = instance.get_physical_device_memory_properties(physical_device);
+        let memory_properties =
+            instance.get_physical_device_memory_properties(self.physical_device);
         let memory_type =
             find_memorytype_index(&memory_requirements, &memory_properties, properties)?;
         let mem_allocate_info = vk::MemoryAllocateInfo {
