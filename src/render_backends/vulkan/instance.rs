@@ -2,7 +2,7 @@ use ash::vk;
 use ash::Entry;
 use ash::Instance;
 use ash::version::{EntryV1_0, V1_0};
-use ash::extensions::{XlibSurface, Surface, DebugReport, Win32Surface};
+use ash::extensions::{DebugReport, Surface, Win32Surface, XlibSurface};
 
 use std::ptr;
 use std::error::Error;
@@ -52,7 +52,7 @@ pub fn new(entry: &Entry<V1_0>) -> Result<Instance<V1_0>, Box<Error>> {
         enabled_extension_count: extension_names.len() as u32,
     };
 
-    let entry = entry.create_instance(&create_info, None)?;
+    let instance = entry.create_instance(&create_info, None)?;
 
-    Ok(entry)
+    Ok(instance)
 }
