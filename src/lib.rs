@@ -2,6 +2,9 @@
 extern crate ash;
 extern crate cgmath;
 extern crate glsl_to_spirv;
+#[macro_use]
+extern crate lazy_static;
+extern crate winit;
 
 pub mod game;
 pub mod renderer;

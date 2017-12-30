@@ -9,6 +9,7 @@ glsl-to-spirv = "0.1"
 winit = "0.7"
 libloading = "0.3"
 cgmath = "0.14"
+lazy_static = "1.0"
 
 [lib]
 crate-type = ["dylib"]
