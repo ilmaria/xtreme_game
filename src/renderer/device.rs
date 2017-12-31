@@ -1,21 +1,21 @@
 use ash::vk;
 use ash::Instance;
 use ash::Device;
-use ash::version::{InstanceV1_0, DeviceV1_0, V1_0};
+use ash::version::{DeviceV1_0, InstanceV1_0, V1_0};
 use ash::extensions::Swapchain;
 
 use std::ptr;
 use std::error::Error;
 
+use super::VK_INSTANCE;
+
 pub fn new(
-    instance: &Instance<V1_0>,
     queue_family_index: u32,
     physical_device: vk::PhysicalDevice,
 ) -> Result<Device<V1_0>, Box<Error>> {
-
     let features = vk::PhysicalDeviceFeatures {
         shader_clip_distance: 1,
-        ..Default::default()
+        ..Default::defaul()
     };
 
     let queue_info = {
@@ -46,17 +46,7 @@ pub fn new(
         p_enabled_features: &features,
     };
 
-    let device = unsafe {
-        instance.create_device(
-            physical_device,
-            &device_create_info,
-            None,
-        )?
-    };
+    let device = unsafe { VK_INSTANCE.create_device(physical_device, &device_create_info, None)? };
 
     Ok(device)
-}
-
-pub fn new_queue(device: &DeviceV1_0, queue_family_index: u32) -> vk::Queue {
-    unsafe { device.get_device_queue(queue_family_index, 0) }
 }

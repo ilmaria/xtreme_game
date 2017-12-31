@@ -27,8 +27,8 @@ use std::ffi::CStr;
 use self::surface::Surface;
 
 lazy_static! {
-    pub static ref VK_ENTRY: Entry<V1_0> = Entry::new().unwrap();
-    pub static ref VK_INSTANCE: Instance<V1_0> = instance::new(&VK_ENTRY).unwrap();
+    static ref VK_ENTRY: Entry<V1_0> = Entry::new().unwrap();
+    static ref VK_INSTANCE: Instance<V1_0> = instance::new(&VK_ENTRY).unwrap();
 }
 
 type VkDevice = Device<V1_0>;
@@ -37,7 +37,7 @@ pub struct Renderer {
     device: VkDevice,
 
     physical_device: vk::PhysicalDevice,
-    queue_family_index: u32,
+    graphics_queue_index: u32,
     graphics_queue: vk::Queue,
 
     surface_loader: Surface,
@@ -67,16 +67,16 @@ impl Renderer {
 
         let surface = Surface::new(window)?;
 
-        let (physical_device, queue_family_index) =
-            physical_device::new_with_queue(&instance, surface, &surface_loader)?;
+        let phys_device = physical_device::new()?;
 
-        let surface_format = surface::new_format(physical_device, surface, &surface_loader)?;
-        let surface_resolution =
-            surface::new_resolution(physical_device, surface, &surface_loader, width, height)?;
+        let surface_format = surface.format(phys_device)?;
+        let surface_resolution = surface.resolution(phys_device)?;
 
-        let device = device::new(&instance, queue_family_index, physical_device)?;
+        let graphics_queue_index = physical_device::graphics_queue_index(&phys_device, &surface)
 
-        let graphics_queue = unsafe { device.get_device_queue(queue_family_index as u32, 0) };
+        let device = device::new(graphics_queue_index, phys_device)?;
+
+        let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index as u32, 0) };
 
         let swapchain_loader = swapchain::new_loader(&device, &instance)?;
 
@@ -111,7 +111,7 @@ impl Renderer {
             depth_image_view,
         )?;
 
-        let command_pool = command::new_pool(&device, queue_family_index)?;
+        let command_pool = command::new_pool(&device, graphics_queue_index)?;
 
         let command_buffers = command::new_buffers(&device, command_pool, swapchain_len as u32)?;
 
@@ -258,7 +258,7 @@ impl Renderer {
             device,
 
             physical_device,
-            queue_family_index,
+            graphics_queue_index,
             graphics_queue,
 
             surface_loader,

@@ -94,7 +94,7 @@ impl Surface {
         self.handle
     }
 
-    fn set_format(
+    fn format(
         &self,
         physical_device: vk::PhysicalDevice,
     ) -> Result<vk::SurfaceFormatKHR, Box<Error>> {
@@ -114,7 +114,7 @@ impl Surface {
         Ok(surface_format)
     }
 
-    fn set_extent(&self, physical_device: vk::PhysicalDevice) -> Result<vk::Extent2D, Box<Error>> {
+    fn extent(&self, physical_device: vk::PhysicalDevice) -> Result<vk::Extent2D, Box<Error>> {
         let surface_capabilities = self.loader
             .get_physical_device_surface_capabilities_khr(physical_device, self.handle)?;
 
