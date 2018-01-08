@@ -5,8 +5,12 @@ use std::ptr;
 use std::u64;
 use std::error::Error;
 
-pub fn new_pool(
-    device: &DeviceV1_0,
+use super::VK_INSTANCE;
+use super::VkDevice;
+use super::sync::create_fence;
+
+pub fn create_pool(
+    device: &VkDevice,
     queue_family_index: u32,
 ) -> Result<vk::CommandPool, Box<Error>> {
     let pool_create_info = vk::CommandPoolCreateInfo {
@@ -21,12 +25,11 @@ pub fn new_pool(
     Ok(command_pool)
 }
 
-pub fn new_buffers(
-    device: &DeviceV1_0,
+pub fn alloc_buffers(
+    device: &VkDevice,
     command_pool: vk::CommandPool,
     count: u32,
 ) -> Result<Vec<vk::CommandBuffer>, Box<Error>> {
-
     let command_buffer_allocate_info = vk::CommandBufferAllocateInfo {
         s_type: vk::StructureType::CommandBufferAllocateInfo,
         p_next: ptr::null(),
@@ -35,16 +38,14 @@ pub fn new_buffers(
         level: vk::CommandBufferLevel::Primary,
     };
 
-    let command_buffers = unsafe {
-        device
-            .allocate_command_buffers(&command_buffer_allocate_info)?
-    };
+    let command_buffers =
+        unsafe { device.allocate_command_buffers(&command_buffer_allocate_info)? };
 
     Ok(command_buffers)
 }
 
-pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
-    device: &DeviceV1_0,
+pub fn submit<F: FnOnce(&VkDevice, vk::CommandBuffer)>(
+    device: &VkDevice,
     command_buffer: vk::CommandBuffer,
     submit_queue: vk::Queue,
     wait_mask: &[vk::PipelineStageFlags],
@@ -66,8 +67,7 @@ pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
     };
 
     unsafe {
-        device
-            .begin_command_buffer(command_buffer, &command_buffer_begin_info)?;
+        device.begin_command_buffer(command_buffer, &command_buffer_begin_info)?;
     }
 
     f(device, command_buffer);
@@ -76,12 +76,7 @@ pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
         device.end_command_buffer(command_buffer)?;
     }
 
-    let fence_create_info = vk::FenceCreateInfo {
-        s_type: vk::StructureType::FenceCreateInfo,
-        p_next: ptr::null(),
-        flags: vk::FenceCreateFlags::empty(),
-    };
-    let submit_fence = unsafe { device.create_fence(&fence_create_info, None)? };
+    let submit_fence = create_fence(&device)?;
     let submit_info = vk::SubmitInfo {
         s_type: vk::StructureType::SubmitInfo,
         p_next: ptr::null(),
@@ -94,8 +89,7 @@ pub fn submit<F: FnOnce(&DeviceV1_0, vk::CommandBuffer)>(
         p_signal_semaphores: signal_semaphores.as_ptr(),
     };
     unsafe {
-        device
-            .queue_submit(submit_queue, &[submit_info], submit_fence)?;
+        device.queue_submit(submit_queue, &[submit_info], submit_fence)?;
 
         device.wait_for_fences(&[submit_fence], true, u64::MAX)?;
         device.destroy_fence(submit_fence, None);

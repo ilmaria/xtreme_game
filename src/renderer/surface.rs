@@ -94,11 +94,28 @@ impl Surface {
         self.handle
     }
 
-    fn format(
+    pub fn present_modes(
+        &self,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<vk::PresentModeKHR, Box<Error>> {
+        self.loader
+            .get_physical_device_surface_present_modes_khr(physical_device, self.handle)?
+            .iter()
+    }
+
+    pub fn capabilities(
+        &self,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<vk::SurfaceCapabilitiesKHR, Box<Error>> {
+        self.loader
+            .get_physical_device_surface_capabilities_khr(physical_device, self.handle)
+    }
+
+    pub fn format(
         &self,
         physical_device: vk::PhysicalDevice,
     ) -> Result<vk::SurfaceFormatKHR, Box<Error>> {
-        let surface_format = self.loader
+        let format = self.loader
             .get_physical_device_surface_formats_khr(physical_device, self.handle)?
             .iter()
             .map(|sfmt| match sfmt.format {
@@ -111,21 +128,20 @@ impl Surface {
             .nth(0)
             .ok_or("Couldn't get physical device surface formats")?;
 
-        Ok(surface_format)
+        Ok(format)
     }
 
-    fn extent(&self, physical_device: vk::PhysicalDevice) -> Result<vk::Extent2D, Box<Error>> {
-        let surface_capabilities = self.loader
-            .get_physical_device_surface_capabilities_khr(physical_device, self.handle)?;
+    pub fn extent(&self, physical_device: vk::PhysicalDevice) -> Result<vk::Extent2D, Box<Error>> {
+        let capabilities = self.capabilities(physical_device)?;
 
-        let surface_resolution = match surface_capabilities.current_extent.width {
+        let extent = match capabilities.current_extent.width {
             u32::MAX => vk::Extent2D {
                 width: self.width,
                 height: self.height,
             },
-            _ => surface_capabilities.current_extent,
+            _ => capabilities.current_extent,
         };
 
-        Ok(surface_resolution)
+        Ok(extent)
     }
 }

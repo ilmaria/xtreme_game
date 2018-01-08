@@ -10,6 +10,7 @@ mod semaphore;
 mod surface;
 mod swapchain;
 mod buffer;
+mod sync;
 
 use ash::vk;
 use ash::Entry;
@@ -25,6 +26,7 @@ use std::ptr;
 use std::ffi::CStr;
 
 use self::surface::Surface;
+use self::swapchain::Swapchain;
 
 lazy_static! {
     static ref VK_ENTRY: Entry<V1_0> = Entry::new().unwrap();
@@ -78,16 +80,7 @@ impl Renderer {
 
         let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index as u32, 0) };
 
-        let swapchain_loader = swapchain::new_loader(&device, &instance)?;
-
-        let swapchain = swapchain::new(
-            &swapchain_loader,
-            physical_device,
-            surface,
-            &surface_loader,
-            &surface_format,
-            &surface_resolution,
-        )?;
+        let swapchain = Swapchain::new(&device, phys_device, &surface)?;
 
         let (depth_image, depth_image_memory) =
             image_views::new_depth_image(&device, &instance, &surface_resolution, physical_device)?;
